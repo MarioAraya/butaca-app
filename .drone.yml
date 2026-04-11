@@ -1,0 +1,37 @@
+kind: pipeline
+type: docker
+name: default
+
+steps:
+  - name: build-and-push
+    image: plugins/docker
+    settings:
+      registry: gitea.lab
+      repo: gitea.lab/${DRONE_REPO}
+      tags:
+        - latest
+        - ${DRONE_COMMIT_SHA:0:7}
+      username:
+        from_secret: GITEA_USERNAME
+      password:
+        from_secret: GITEA_PASSWORD
+      insecure: true
+
+  - name: deploy
+    image: appleboy/drone-ssh
+    settings:
+      host: 192.168.0.104
+      username:
+        from_secret: SSH_USER
+      key:
+        from_secret: SSH_KEY
+      script:
+        - docker pull gitea.lab/${DRONE_REPO}:latest
+        - cd /opt/que-ver-cine-hoy
+        - docker compose -f docker-compose.prod.yml up -d --force-recreate
+
+trigger:
+  branch:
+    - main
+  event:
+    - push

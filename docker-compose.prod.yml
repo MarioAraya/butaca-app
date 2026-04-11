@@ -1,0 +1,23 @@
+services:
+  api:
+    image: gitea.lab/${DRONE_REPO:-que-ver-cine-hoy/que-ver-cine-hoy}:latest
+    restart: unless-stopped
+    volumes:
+      - /opt/que-ver-cine-hoy/data:/app/data
+    environment:
+      - DATABASE_PATH=data/cinepolis.db
+      - SCRAPE_DELAY_SECONDS=20
+      - SCRAPE_CITY=santiago-centro
+      - SCRAPE_CRON_HOUR=6
+      - SCRAPE_CRON_MINUTE=0
+      - API_ADMIN_KEY=${API_ADMIN_KEY}
+      - VIRTUAL_HOST=cine.lab
+      - VIRTUAL_PORT=8000
+    expose:
+      - "8000"
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true

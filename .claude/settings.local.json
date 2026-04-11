@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:cinepolischile.cl)",
+      "WebFetch(domain:static.cinepolis.com)",
+      "Bash(git:*)",
+      "WebFetch(domain:pypi.org)",
+      "Bash(python3 -m venv .venv)",
+      "Bash(source .venv/bin/activate)",
+      "Bash(pip install:*)",
+      "Bash(playwright install:*)",
+      "Bash(python -c \"from src.main import app; print\\(''OK:'', app.title\\)\")",
+      "Bash(python -c \":*)",
+      "Bash(python3:*)",
+      "Bash(rm -f /Users/maaya/dev/que-ver-cine-hoy/data/cinepolis.db*)",
+      "Bash(source /Users/maaya/dev/que-ver-cine-hoy/.venv/bin/activate)",
+      "Bash(curl -s \"http://localhost:8000/api/v1/movies/hoppers-operacion-castor\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/movies?genre=Animaci\")",
+      "Bash(kill %1)",
+      "Bash(docker build:*)",
+      "Bash(colima start:*)",
+      "Bash(docker context:*)",
+      "Read(//Users/maaya/.docker/run/**)",
+      "Read(//var/run/**)",
+      "Bash(docker:*)",
+      "Bash(open -a Docker)",
+      "Bash(python -c \"import src\")"
+    ]
+  }
+}
