@@ -1,6 +1,6 @@
 services:
   api:
-    image: gitea.lab/${DRONE_REPO:-maaya/que-ver-cine-hoy}:latest
+    image: 192.168.0.103:5000/maaya/que-ver-cine-hoy:latest
     restart: unless-stopped
     ports:
       - "8082:8000"

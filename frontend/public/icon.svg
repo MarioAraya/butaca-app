@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" rx="20" fill="#0d0d14"/>
+  <!-- clapper board top -->
+  <rect x="14" y="18" width="72" height="18" rx="4" fill="#1e1e35"/>
+  <rect x="14" y="18" width="72" height="18" rx="4" fill="none" stroke="#2a2a4a" stroke-width="1.5"/>
+  <rect x="20" y="18" width="9" height="18" fill="#f59e0b" rx="2"/>
+  <rect x="37" y="18" width="9" height="18" fill="#f59e0b" rx="2"/>
+  <rect x="54" y="18" width="9" height="18" fill="#f59e0b" rx="2"/>
+  <rect x="71" y="18" width="9" height="18" fill="#f59e0b" rx="2"/>
+  <!-- clapper board body -->
+  <rect x="14" y="38" width="72" height="44" rx="4" fill="#1e1e35"/>
+  <rect x="14" y="38" width="72" height="44" rx="4" fill="none" stroke="#2a2a4a" stroke-width="1.5"/>
+  <!-- play button -->
+  <polygon points="40,48 40,70 63,59" fill="#f59e0b"/>
+</svg>

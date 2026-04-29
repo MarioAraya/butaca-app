@@ -15,35 +15,30 @@ steps:
   - name: build-and-push
     image: plugins/docker
     settings:
-      registry: gitea.lab
-      repo: gitea.lab/${DRONE_REPO}
+      registry: 192.168.0.103:5000
+      repo: 192.168.0.103:5000/maaya/que-ver-cine-hoy
+      insecure: true
       tags:
         - latest
-        - ${DRONE_COMMIT_SHA:0:7}
-      username:
-        from_secret: GITEA_USERNAME
-      password:
-        from_secret: GITEA_PASSWORD
-      insecure: true
+        - ${DRONE_COMMIT_SHA:0:8}
 
   - name: deploy
     image: appleboy/drone-ssh
     settings:
       host: 192.168.0.104
-      username:
-        from_secret: SSH_USER
+      username: maaya
       key:
-        from_secret: SSH_KEY
+        from_secret: ssh_key
       script:
         - mkdir -p ~/cine/data
-        - docker pull gitea.lab/${DRONE_REPO}:latest
+        - docker pull 192.168.0.103:5000/maaya/que-ver-cine-hoy:latest
         - docker stop que-ver-cine-hoy-api || true
         - docker rm que-ver-cine-hoy-api || true
         - docker run -d --name que-ver-cine-hoy-api --restart unless-stopped
             -p 8082:8000
             -v $HOME/cine/data:/app/data
             --env-file $HOME/cine/.env
-            gitea.lab/${DRONE_REPO}:latest
+            192.168.0.103:5000/maaya/que-ver-cine-hoy:latest
 
 ---
 kind: pipeline
@@ -62,16 +57,12 @@ steps:
   - name: build-and-push
     image: plugins/docker
     settings:
-      registry: gitea.lab
-      repo: gitea.lab/maaya/que-ver-cine-hoy-frontend
+      registry: 192.168.0.103:5000
+      repo: 192.168.0.103:5000/maaya/que-ver-cine-hoy-frontend
+      insecure: true
       tags:
         - latest
-        - ${DRONE_COMMIT_SHA:0:7}
-      username:
-        from_secret: GITEA_USERNAME
-      password:
-        from_secret: GITEA_PASSWORD
-      insecure: true
+        - ${DRONE_COMMIT_SHA:0:8}
       context: frontend
       dockerfile: frontend/Dockerfile
       build_args:
@@ -81,14 +72,13 @@ steps:
     image: appleboy/drone-ssh
     settings:
       host: 192.168.0.104
-      username:
-        from_secret: SSH_USER
+      username: maaya
       key:
-        from_secret: SSH_KEY
+        from_secret: ssh_key
       script:
-        - docker pull gitea.lab/maaya/que-ver-cine-hoy-frontend:latest
+        - docker pull 192.168.0.103:5000/maaya/que-ver-cine-hoy-frontend:latest
         - docker stop que-ver-cine-hoy-frontend || true
         - docker rm que-ver-cine-hoy-frontend || true
         - docker run -d --name que-ver-cine-hoy-frontend --restart unless-stopped
             -p 8083:80
-            gitea.lab/maaya/que-ver-cine-hoy-frontend:latest
+            192.168.0.103:5000/maaya/que-ver-cine-hoy-frontend:latest

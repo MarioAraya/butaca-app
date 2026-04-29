@@ -24,7 +24,23 @@
       "Read(//var/run/**)",
       "Bash(docker:*)",
       "Bash(open -a Docker)",
-      "Bash(python -c \"import src\")"
+      "Bash(python -c \"import src\")",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:5175)",
+      "Bash(curl -s http://localhost:5174)",
+      "Bash(/usr/local/bin/node --version)",
+      "Bash(/opt/homebrew/bin/node --version)",
+      "Bash(~/.nvm/versions/node/*/bin/node --version)",
+      "Read(//Users/maaya/.nvm/versions/node/**)",
+      "Read(//opt/homebrew/opt/**)",
+      "Bash(~/.nvm/versions/node/v22.17.1/bin/npm --prefix /Users/maaya/dev/que-ver-cine-hoy/frontend run dev)",
+      "Bash(export PATH=\"$HOME/.nvm/versions/node/v22.17.1/bin:$PATH\")",
+      "Bash(jobs)",
+      "Bash(curl -s http://localhost:5176/src/main.jsx)",
+      "Bash(kill %1 %2)",
+      "Bash(curl -s http://localhost:5175/src/main.jsx)",
+      "Bash(curl -s http://localhost:5174/src/main.jsx)"
     ]
   }
 }

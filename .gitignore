@@ -10,3 +10,6 @@ data/*.db
 data/*.db-wal
 data/*.db-shm
 .pytest_cache/
+
+/frontend/node_modules/
+/frontend/.env
