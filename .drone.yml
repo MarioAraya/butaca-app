@@ -1,6 +1,15 @@
 kind: pipeline
 type: docker
-name: default
+name: backend
+
+trigger:
+  branch:
+    - main
+  event:
+    - push
+  paths:
+    exclude:
+      - frontend/**
 
 steps:
   - name: build-and-push
@@ -26,12 +35,60 @@ steps:
       key:
         from_secret: SSH_KEY
       script:
+        - mkdir -p ~/cine/data
         - docker pull gitea.lab/${DRONE_REPO}:latest
-        - cd /opt/que-ver-cine-hoy
-        - docker compose -f docker-compose.prod.yml up -d --force-recreate
+        - docker stop que-ver-cine-hoy-api || true
+        - docker rm que-ver-cine-hoy-api || true
+        - docker run -d --name que-ver-cine-hoy-api --restart unless-stopped
+            -p 8082:8000
+            -v $HOME/cine/data:/app/data
+            --env-file $HOME/cine/.env
+            gitea.lab/${DRONE_REPO}:latest
+
+---
+kind: pipeline
+type: docker
+name: frontend
 
 trigger:
   branch:
     - main
   event:
     - push
+  paths:
+    - frontend/**
+
+steps:
+  - name: build-and-push
+    image: plugins/docker
+    settings:
+      registry: gitea.lab
+      repo: gitea.lab/maaya/que-ver-cine-hoy-frontend
+      tags:
+        - latest
+        - ${DRONE_COMMIT_SHA:0:7}
+      username:
+        from_secret: GITEA_USERNAME
+      password:
+        from_secret: GITEA_PASSWORD
+      insecure: true
+      context: frontend
+      dockerfile: frontend/Dockerfile
+      build_args:
+        - VITE_API_URL=http://cine-api.lab
+
+  - name: deploy
+    image: appleboy/drone-ssh
+    settings:
+      host: 192.168.0.104
+      username:
+        from_secret: SSH_USER
+      key:
+        from_secret: SSH_KEY
+      script:
+        - docker pull gitea.lab/maaya/que-ver-cine-hoy-frontend:latest
+        - docker stop que-ver-cine-hoy-frontend || true
+        - docker rm que-ver-cine-hoy-frontend || true
+        - docker run -d --name que-ver-cine-hoy-frontend --restart unless-stopped
+            -p 8083:80
+            gitea.lab/maaya/que-ver-cine-hoy-frontend:latest

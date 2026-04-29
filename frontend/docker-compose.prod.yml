@@ -1,0 +1,6 @@
+services:
+  frontend:
+    image: gitea.lab/maaya/que-ver-cine-hoy-frontend:latest
+    restart: unless-stopped
+    ports:
+      - "8083:80"
