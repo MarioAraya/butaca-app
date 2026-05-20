@@ -38,7 +38,7 @@ steps:
             --network traefik-net
             --restart unless-stopped
             --label "traefik.enable=true"
-            --label "traefik.http.routers.cine-api.rule=Host(`cine-api.lab`)"
+            --label "traefik.http.routers.cine-api.rule=Host(\`cine-api.lab\`)"
             --label "traefik.http.routers.cine-api.entrypoints=web"
             --label "traefik.http.services.cine-api.loadbalancer.server.port=8000"
             -v $HOME/cine/data:/app/data
@@ -88,7 +88,7 @@ steps:
             --network traefik-net
             --restart unless-stopped
             --label "traefik.enable=true"
-            --label "traefik.http.routers.cine.rule=Host(`cine.lab`)"
+            --label "traefik.http.routers.cine.rule=Host(\`cine.lab\`)"
             --label "traefik.http.routers.cine.entrypoints=web"
             --label "traefik.http.services.cine.loadbalancer.server.port=80"
             192.168.0.103:5000/maaya/que-ver-cine-hoy-frontend:latest
