@@ -3,6 +3,7 @@ import { fetchMovies, fetchMovieDetail } from './api'
 import Header from './components/Header'
 import DateTabs from './components/DateTabs'
 import MovieCard from './components/MovieCard'
+import MovieModal from './components/MovieModal'
 
 const TARGET_PATTERNS = ['imperio', 'estaci']
 
@@ -18,6 +19,7 @@ export default function App() {
   const [dates, setDates] = useState([])
   const [selectedDate, setSelectedDate] = useState(null)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [selectedMovie, setSelectedMovie] = useState(null)
 
   useEffect(() => {
     const onOnline = () => setIsOnline(true)
@@ -120,10 +122,13 @@ export default function App() {
           </div>
         ) : (
           visibleMovies.map(({ movie, byCinema }) => (
-            <MovieCard key={movie.id} movie={movie} byCinema={byCinema} />
+            <MovieCard key={movie.id} movie={movie} byCinema={byCinema} onSelect={() => setSelectedMovie(movie)} />
           ))
         )}
       </main>
+      {selectedMovie && (
+        <MovieModal movie={selectedMovie} onClose={() => setSelectedMovie(null)} />
+      )}
     </div>
   )
 }

@@ -2,9 +2,10 @@ function formatTime(t) {
   return String(t).slice(0, 5)
 }
 
-export default function MovieCard({ movie, byCinema }) {
+export default function MovieCard({ movie, byCinema, onSelect }) {
   return (
-    <article class="movie-card">
+    <article class="movie-card" onClick={onSelect} role="button" tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && onSelect()}>
       <div class="movie-poster">
         {movie.poster_url ? (
           <img

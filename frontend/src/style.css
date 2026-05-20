@@ -376,6 +376,139 @@ body {
   margin-bottom: 12px;
 }
 
+/* ── Movie card clickable ── */
+
+.movie-card {
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.movie-card:hover {
+  border-color: var(--accent-border);
+}
+
+.movie-card:active {
+  opacity: 0.85;
+}
+
+/* ── Modal ── */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  animation: fade-in 0.15s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-sheet {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--surface);
+  border-radius: 20px 20px 0 0;
+  max-height: 90dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  position: relative;
+  animation: slide-up 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.modal-handle {
+  width: 36px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 10px auto 0;
+}
+
+.modal-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: transparent;
+  border: 1.5px solid var(--accent);
+  color: var(--accent);
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.modal-content {
+  padding: 16px 16px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-title {
+  font-size: 1.3rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  padding-right: 36px;
+}
+
+.modal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.modal-genres {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.modal-trailer {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+}
+
+.modal-trailer iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+.modal-synopsis-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.modal-synopsis p {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+
 /* ── Desktop enhancement ── */
 
 @media (min-width: 560px) {
