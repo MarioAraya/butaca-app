@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, date
 
 from sqlalchemy.orm import Session
 
@@ -77,6 +77,12 @@ async def run_scrape():
     db = SessionLocal()
 
     try:
+        # Purge stale showtimes from past dates
+        deleted = db.query(Showtime).filter(Showtime.show_date < date.today()).delete()
+        db.commit()
+        if deleted:
+            logger.info("Purged %d past showtimes", deleted)
+
         # Phase 1: Get all movies + showtimes from the JSON API (1 HTTP request)
         logger.info("=== Phase 1: Fetching from API ===")
         api_movies, all_showtimes = await fetch_now_playing(rate_limiter)
