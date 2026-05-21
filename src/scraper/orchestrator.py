@@ -18,6 +18,7 @@ from src.db.models import Cinema, Movie, ScrapeLog, Showtime
 from src.scraper.api_client import fetch_now_playing
 from src.scraper.detail import scrape_movie_detail
 from src.scraper.rate_limiter import RateLimiter
+from src.scraper.youtube import find_trailer
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,9 @@ async def run_scrape():
                     # Prefer API poster/trailer if detail has better version
                     if not merged.get("poster_url") and detail.get("poster_url"):
                         merged["poster_url"] = detail["poster_url"]
+
+                if not merged.get("trailer_url"):
+                    merged["trailer_url"] = await find_trailer(merged.get("title", slug))
 
                 movie = _upsert_movie(db, merged)
                 _save_showtimes(db, movie, showtimes_by_slug.get(slug, []))
