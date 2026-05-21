@@ -40,7 +40,14 @@
       "Bash(curl -s http://localhost:5176/src/main.jsx)",
       "Bash(kill %1 %2)",
       "Bash(curl -s http://localhost:5175/src/main.jsx)",
-      "Bash(curl -s http://localhost:5174/src/main.jsx)"
+      "Bash(curl -s http://localhost:5174/src/main.jsx)",
+      "Bash(drone --version)",
+      "Read(//private/etc/**)",
+      "Bash(ssh maaya@192.168.0.102 \"ls /etc/nginx/sites-enabled/ && grep -r 'timer' /etc/nginx/sites-enabled/ 2>/dev/null || echo 'no timer config'\")",
+      "Bash(curl -s http://localhost:8000/api/v1/health)",
+      "Bash(echo \"PID front: $!\")",
+      "Bash(curl *)",
+      "Bash(ssh maaya@192.168.0.104 \"grep API_ADMIN_KEY ~/cine/.env\")"
     ]
   }
 }
