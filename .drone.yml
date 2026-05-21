@@ -80,7 +80,7 @@ steps:
       context: frontend
       dockerfile: frontend/Dockerfile
       build_args:
-        - VITE_API_URL=http://cine-api.lab
+        - VITE_API_URL=https://cine-api.lab
 
   - name: deploy
     image: appleboy/drone-ssh
