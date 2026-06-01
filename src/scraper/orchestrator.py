@@ -17,6 +17,7 @@ from src.db.engine import SessionLocal
 from src.db.models import Cinema, Movie, ScrapeLog, Showtime
 from src.scraper.api_client import fetch_now_playing
 from src.scraper.detail import scrape_movie_detail
+from src.scraper.normandie import fetch_normandie
 from src.scraper.rate_limiter import RateLimiter
 from src.scraper.youtube import find_trailer
 
@@ -90,47 +91,76 @@ async def run_scrape():
         movies_found = len(api_movies)
 
         if not api_movies:
-            errors.append("No movies returned from API")
-            logger.error("No movies found, aborting")
-            return
+            errors.append("No movies returned from Cinepolis API")
+            logger.error("No Cinepolis movies found, skipping Cinepolis phase")
+        else:
+            # Build showtime lookup: slug → list of showtime dicts
+            showtimes_by_slug: dict[str, list[dict]] = {}
+            for st in all_showtimes:
+                showtimes_by_slug.setdefault(st["movie_slug"], []).append(st)
 
-        # Build showtime lookup: slug → list of showtime dicts
-        showtimes_by_slug: dict[str, list[dict]] = {}
-        for st in all_showtimes:
-            showtimes_by_slug.setdefault(st["movie_slug"], []).append(st)
+            # Phase 2: Enrich each movie with synopsis + genres from detail page
+            for movie_data in api_movies:
+                slug = movie_data["slug"]
+                try:
+                    logger.info("=== Phase 2: Detail for %s ===", slug)
+                    detail = await scrape_movie_detail(slug, rate_limiter)
 
-        # Phase 2: Enrich each movie with synopsis + genres from detail page
-        for movie_data in api_movies:
-            slug = movie_data["slug"]
-            try:
-                logger.info("=== Phase 2: Detail for %s ===", slug)
-                detail = await scrape_movie_detail(slug, rate_limiter)
+                    merged = {**movie_data}
+                    if detail:
+                        # Only take fields the API doesn't provide well
+                        for field in ("synopsis", "genres"):
+                            if detail.get(field):
+                                merged[field] = detail[field]
+                        # Prefer API poster/trailer if detail has better version
+                        if not merged.get("poster_url") and detail.get("poster_url"):
+                            merged["poster_url"] = detail["poster_url"]
 
-                merged = {**movie_data}
-                if detail:
-                    # Only take fields the API doesn't provide well
-                    for field in ("synopsis", "genres"):
-                        if detail.get(field):
-                            merged[field] = detail[field]
-                    # Prefer API poster/trailer if detail has better version
-                    if not merged.get("poster_url") and detail.get("poster_url"):
-                        merged["poster_url"] = detail["poster_url"]
+                    if not merged.get("trailer_url"):
+                        merged["trailer_url"] = await find_trailer(merged.get("title", slug))
 
-                if not merged.get("trailer_url"):
-                    merged["trailer_url"] = await find_trailer(merged.get("title", slug))
+                    movie = _upsert_movie(db, merged)
+                    _save_showtimes(db, movie, showtimes_by_slug.get(slug, []))
+                    db.commit()
+                    movies_scraped += 1
+                    st_count = len(showtimes_by_slug.get(slug, []))
+                    logger.info("Saved: %s (%d showtimes)", slug, st_count)
 
-                movie = _upsert_movie(db, merged)
-                _save_showtimes(db, movie, showtimes_by_slug.get(slug, []))
-                db.commit()
-                movies_scraped += 1
-                st_count = len(showtimes_by_slug.get(slug, []))
-                logger.info("Saved: %s (%d showtimes)", slug, st_count)
+                except Exception as e:
+                    db.rollback()
+                    msg = f"Error processing {slug}: {e}"
+                    errors.append(msg)
+                    logger.exception(msg)
 
-            except Exception as e:
-                db.rollback()
-                msg = f"Error processing {slug}: {e}"
-                errors.append(msg)
-                logger.exception(msg)
+        # Normandie scrape (no detail phase — title + showtimes only)
+        logger.info("=== Normandie scrape ===")
+        try:
+            norm_movies, norm_showtimes = await fetch_normandie(rate_limiter)
+            movies_found += len(norm_movies)
+
+            norm_showtimes_by_slug: dict[str, list[dict]] = {}
+            for st in norm_showtimes:
+                norm_showtimes_by_slug.setdefault(st["movie_slug"], []).append(st)
+
+            for movie_data in norm_movies:
+                slug = movie_data["slug"]
+                try:
+                    if not movie_data.get("trailer_url"):
+                        movie_data["trailer_url"] = await find_trailer(movie_data.get("title", slug))
+                    movie = _upsert_movie(db, movie_data)
+                    _save_showtimes(db, movie, norm_showtimes_by_slug.get(slug, []))
+                    db.commit()
+                    movies_scraped += 1
+                    logger.info("Saved Normandie: %s (%d showtimes)", slug, len(norm_showtimes_by_slug.get(slug, [])))
+                except Exception as e:
+                    db.rollback()
+                    msg = f"Error processing Normandie {slug}: {e}"
+                    errors.append(msg)
+                    logger.exception(msg)
+        except Exception as e:
+            msg = f"Normandie scrape failed: {e}"
+            errors.append(msg)
+            logger.exception(msg)
 
     finally:
         status = "success" if not errors else ("partial" if movies_scraped > 0 else "failed")

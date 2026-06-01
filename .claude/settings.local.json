@@ -47,7 +47,11 @@
       "Bash(curl -s http://localhost:8000/api/v1/health)",
       "Bash(echo \"PID front: $!\")",
       "Bash(curl *)",
-      "Bash(ssh maaya@192.168.0.104 \"grep API_ADMIN_KEY ~/cine/.env\")"
+      "Bash(ssh maaya@192.168.0.104 \"grep API_ADMIN_KEY ~/cine/.env\")",
+      "Bash(sqlite3 /Users/maaya/dev/que-ver-cine-hoy/data/cinepolis.db \"SELECT id, name FROM cinemas ORDER BY name;\")",
+      "Bash(sqlite3 *)",
+      "WebFetch(domain:normandie.cl)",
+      "Bash(python *)"
     ]
   }
 }

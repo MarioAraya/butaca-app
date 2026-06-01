@@ -13,3 +13,4 @@ data/*.db-shm
 
 /frontend/node_modules/
 /frontend/.env
+screenshots/
