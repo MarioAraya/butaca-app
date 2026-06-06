@@ -51,7 +51,10 @@
       "Bash(sqlite3 /Users/maaya/dev/que-ver-cine-hoy/data/cinepolis.db \"SELECT id, name FROM cinemas ORDER BY name;\")",
       "Bash(sqlite3 *)",
       "WebFetch(domain:normandie.cl)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(lsof -ti:8000)",
+      "Bash(lsof -ti:5175)",
+      "Bash(docker-compose config *)"
     ]
   }
 }
