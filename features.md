@@ -37,12 +37,20 @@
 - [ ] Selección de ciudad en filtros
 
 ### v0.3.0 — Frontend
-- [ ] Interfaz web (Next.js o similar)
-- [ ] Vista de cartelera tipo grid
-- [ ] Filtros interactivos
-- [ ] Detalle de película con trailer embebido
+- [x] Interfaz web (Preact/Vite)
+- [x] Vista de cartelera tipo grid (columnas en desktop)
+- [x] Filtro por fecha (tabs horizontales con scroll)
+- [x] Filtro por cine (toggle multi-select, mismo estilo que fechas)
+- [x] Detalle de película con trailer embebido (modal bottom sheet)
+- [ ] Filtro por género
 
-### v0.4.0 — Notificaciones
+### v0.4.0 — Más cines (scrapers pendientes)
+
+- [ ] **El Biógrafo** — `https://elbiografo.cl/category/cartelera/` — cine arte, WordPress, server-rendered
+- [ ] **Cineplanet** — `https://www.cineplanet.cl/peliculas` — cadena grande, JS-heavy (Angular/React), tiene API interna probable. Sucursales: CP Alameda, CP La Reina, etc.
+- [ ] **Centro Arte Alameda** — `https://centroartealameda.cl` — cine comunitario/arte, cartelera semanal con días y horas por película, imagen de cartelera como fuente principal
+
+### v0.5.0 — Notificaciones
 - [ ] Alertas de estrenos
 - [ ] Notificaciones por género favorito
 - [ ] Webhook para integraciones

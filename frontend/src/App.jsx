@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from 'preact/hooks'
+import { useState, useEffect, useCallback, useMemo } from 'preact/hooks'
 import { fetchMovies, fetchMovieDetail } from './api'
 import Header from './components/Header'
 import DateTabs from './components/DateTabs'
+import CinemaFilter from './components/CinemaFilter'
 import MovieCard from './components/MovieCard'
 import MovieModal from './components/MovieModal'
 
-const TARGET_PATTERNS = ['imperio', 'estaci']
+const TARGET_PATTERNS = ['imperio', 'estaci', 'normandie']
 
 function isTargetCinema(name) {
   const lower = name.toLowerCase()
@@ -18,6 +19,7 @@ export default function App() {
   const [movieData, setMovieData] = useState([])
   const [dates, setDates] = useState([])
   const [selectedDate, setSelectedDate] = useState(null)
+  const [selectedCinemas, setSelectedCinemas] = useState(new Set())
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [selectedMovie, setSelectedMovie] = useState(null)
 
@@ -74,6 +76,20 @@ export default function App() {
     loadData()
   }, [loadData])
 
+  const allCinemas = useMemo(() => {
+    const names = new Set(movieData.flatMap(({ byCinema }) => Object.keys(byCinema)))
+    return [...names].sort()
+  }, [movieData])
+
+  function toggleCinema(name) {
+    setSelectedCinemas((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
+
   const visibleMovies = selectedDate
     ? movieData
         .map(({ movie, byCinema }) => {
@@ -84,6 +100,7 @@ export default function App() {
                 times.filter((t) => t.show_date === selectedDate),
               ])
               .filter(([, times]) => times.length > 0)
+              .filter(([cinema]) => selectedCinemas.size === 0 || selectedCinemas.has(cinema))
           )
           return { movie, byCinema: filteredByCinema }
         })
@@ -101,6 +118,7 @@ export default function App() {
       )}
 
       <DateTabs dates={dates} selected={selectedDate} onSelect={setSelectedDate} />
+      <CinemaFilter cinemas={allCinemas} selected={selectedCinemas} onToggle={toggleCinema} />
 
       <main class="movies-list">
         {loading ? (
