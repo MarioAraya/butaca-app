@@ -54,7 +54,9 @@
       "Bash(python *)",
       "Bash(lsof -ti:8000)",
       "Bash(lsof -ti:5175)",
-      "Bash(docker-compose config *)"
+      "Bash(docker-compose config *)",
+      "Bash(break)",
+      "Bash(npx playwright *)"
     ]
   }
 }
