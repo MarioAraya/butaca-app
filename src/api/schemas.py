@@ -26,6 +26,8 @@ class MovieSummary(BaseModel):
     runtime_minutes: int | None
     poster_url: str | None
     detail_url: str | None
+    imdb_rating: str | None
+    imdb_url: str | None
 
     model_config = {"from_attributes": True}
 

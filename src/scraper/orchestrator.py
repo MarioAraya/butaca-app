@@ -18,6 +18,7 @@ from src.db.models import Cinema, Movie, ScrapeLog, Showtime
 from src.scraper.api_client import fetch_now_playing
 from src.scraper.detail import scrape_movie_detail
 from src.scraper.normandie import fetch_normandie
+from src.scraper.omdb import find_imdb_rating
 from src.scraper.rate_limiter import RateLimiter
 from src.scraper.youtube import find_trailer
 
@@ -119,6 +120,10 @@ async def run_scrape():
                     if not merged.get("trailer_url"):
                         merged["trailer_url"] = await find_trailer(merged.get("title", slug))
 
+                    merged["imdb_rating"], merged["imdb_url"] = await find_imdb_rating(
+                        merged.get("title", slug)
+                    )
+
                     movie = _upsert_movie(db, merged)
                     _save_showtimes(db, movie, showtimes_by_slug.get(slug, []))
                     db.commit()
@@ -147,6 +152,9 @@ async def run_scrape():
                 try:
                     if not movie_data.get("trailer_url"):
                         movie_data["trailer_url"] = await find_trailer(movie_data.get("title", slug))
+                    movie_data["imdb_rating"], movie_data["imdb_url"] = await find_imdb_rating(
+                        movie_data.get("title", slug)
+                    )
                     movie = _upsert_movie(db, movie_data)
                     _save_showtimes(db, movie, norm_showtimes_by_slug.get(slug, []))
                     db.commit()

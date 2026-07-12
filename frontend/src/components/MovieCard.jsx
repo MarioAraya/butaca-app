@@ -29,6 +29,9 @@ export default function MovieCard({ movie, byCinema, onSelect }) {
           {movie.runtime_minutes && (
             <span class="badge">{movie.runtime_minutes} min</span>
           )}
+          {movie.imdb_rating && (
+            <span class="badge badge-imdb">★ {movie.imdb_rating}</span>
+          )}
         </div>
 
         {movie.genres && (

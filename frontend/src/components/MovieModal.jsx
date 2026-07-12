@@ -31,6 +31,17 @@ export default function MovieModal({ movie, onClose }) {
           <div class="modal-meta">
             {movie.age_rating && <span class="badge">{movie.age_rating}</span>}
             {movie.runtime_minutes && <span class="badge">{movie.runtime_minutes} min</span>}
+            {movie.imdb_rating && (
+              <a
+                class="badge badge-imdb"
+                href={movie.imdb_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+              >
+                ★ {movie.imdb_rating} IMDb
+              </a>
+            )}
             {movie.genres && <span class="modal-genres">{movie.genres}</span>}
           </div>
 

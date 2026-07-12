@@ -287,6 +287,13 @@ body {
   white-space: nowrap;
 }
 
+.badge-imdb {
+  background: #f5c518;
+  border-color: #f5c518;
+  color: #000;
+  text-decoration: none;
+}
+
 .movie-genres {
   font-size: 0.73rem;
   color: var(--text-muted);

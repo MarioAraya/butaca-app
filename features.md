@@ -43,6 +43,7 @@
 - [x] Filtro por cine (toggle multi-select, mismo estilo que fechas)
 - [x] Detalle de película con trailer embebido (modal bottom sheet)
 - [ ] Filtro por género
+- [x] Rating IMDb (OMDb API) por película, badge en card + link en modal — pendiente commitear y setear `OMDB_API_KEY` en prod
 
 ### v0.4.0 — Más cines (scrapers pendientes)
 

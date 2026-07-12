@@ -36,6 +36,8 @@ class Movie(Base):
     trailer_url = Column(String)
     detail_url = Column(String)
     cinepolis_id = Column(String)
+    imdb_rating = Column(String)
+    imdb_url = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
