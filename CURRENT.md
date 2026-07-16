@@ -1,63 +1,51 @@
-# CURRENT — que-ver-cine-hoy
+# CURRENT — Butaca (ex que-ver-cine-hoy)
 
-Última sesión: 2026-07-12
+Última sesión: 2026-07-16
 
 ## En progreso
 
-### Feature: rating IMDb (OMDb API) — WIP sin commitear
+### Mirror público en GitHub (butaca-app) — EN CURSO, todavía no pusheado
 
-Se agregó integración con OMDb para mostrar rating IMDb en cada película (badge ★ en card y modal, con link a IMDb).
-
-**Contexto recopilado:**
-- `src/scraper/omdb.py` (nuevo, sin trackear) — `find_imdb_rating(title)` llama a OMDb API, devuelve `(rating, imdb_url)` o `(None, None)` si falla o no hay `OMDB_API_KEY` configurada. Falla silenciosa (try/except interno), no rompe el scrape.
-- `src/scraper/orchestrator.py` — llama `find_imdb_rating` para cada película (Cinépolis y Normandie) antes de guardar.
-- `src/db/models.py` + `src/db/migrations.py` — columnas nuevas `imdb_rating`, `imdb_url` en `movies`, con `ALTER TABLE` automático en `_add_missing_columns()` (no hay sistema de migraciones formal, así que esto corre en cada `create_tables()`).
-- `src/api/schemas.py` — `MovieSummary` expone ambos campos.
-- `frontend/MovieCard.jsx` / `MovieModal.jsx` / `style.css` — badge `★ {rating}` (card) y link a IMDb (modal).
-- `.env.example` — documenta `OMDB_API_KEY` (key gratis en omdbapi.com).
+Nombre público decidido: "Butaca". Destino: `https://github.com/MarioAraya/butaca-app.git`, repo **público**. El repo operativo real sigue siendo gitea (privado, homelab) — GitHub es solo un espejo de código, sin la config de deploy específica de infra.
 
 **Decisiones tomadas:**
-- Rating opcional: si no hay `OMDB_API_KEY` en `.env` de prod, el feature queda inactivo sin romper nada (`find_imdb_rating` retorna `None, None` de inmediato).
+- `.drone.yml` y `docker-compose.prod.yml` (root + frontend) quedan **excluidos** del mirror de GitHub — contienen IPs privadas del homelab (192.168.0.103/.104) y hostnames internos (`cine.lab`, `cine-api.lab`). No son credenciales explotables (RFC1918 no rutea desde internet) pero sí exponen topología. Gitea (privado) los sigue teniendo completos.
+- Se auditó **todo** el historial de git (`git log --all -p`) buscando secretos reales antes de pushear a un remoto público — no se encontró ninguno. Los `from_secret:` en `.drone.yml` son referencias al vault de Drone, no valores.
+- El `x-apikey` hardcodeado en `src/scraper/cinepolis.py` NO es secreto — es una clave pública que el propio frontend de Cinepolis manda en cada request (visible en devtools de cualquiera). Documentado como tal en el código.
+- Deploy target real del usuario: **VPS Contabo**, con **Traefik** como reverse proxy (mismo que usa en su homelab) — no Caddy. Ver `docker-compose.vps.yml` (nuevo, genérico, sin IPs — sí va a GitHub).
 
-**Preguntas pendientes antes de continuar:**
-1. ¿Se seteó `OMDB_API_KEY` en el `.env` de prod (cine.lab)? Sin eso el rating no aparece nunca.
-2. ¿Falta commitear `src/scraper/omdb.py` (actualmente `??` en git status) junto con el resto de los cambios?
+**Plan pa' el mirror (pendiente ejecutar):**
+- `main` de gitea sigue con historial completo (incluye `.drone.yml`) — no tocar, sigue apuntando solo a `gitea`.
+- Para GitHub: generar una rama/commit squash sin esos 2 archivos y pushear a `github main` como primer commit del mirror público.
+- De ahí en adelante, cualquier cambio nuevo que se quiera reflejar en GitHub hay que aplicarlo a mano (no hay sync automático) — evaluar mejor proceso si se vuelve tedioso.
 
-### Debug: "no está lo de hoy" en cine.lab (2026-07-12)
+## Completado esta sesión (2026-07-16)
 
-Usuario reportó que cine.lab no mostraba cartelera de hoy. Log del backend mostrado no tenía errores (puros 200 OK). Sin acceso a red desde el sandbox de esta sesión (TLS handshake a `cine.lab` cuelga) — no se pudo confirmar la causa raíz en vivo.
+- [x] Reescritura completa del scraper de Cinépolis (`src/scraper/cinepolis.py`) — el sitio migró de `cinepolischile.cl` a `cinepolis.com/cl` (micro-frontend Next.js, GraphQL detrás de Cloudflare bot-management). Usa Playwright para pasar el challenge. Borrados `api_client.py` y `detail.py` (muertos, del sitio viejo).
+- [x] Fix OMDb: fallback a `original_title` cuando el título en español no matchea (ej. "Evil Dead: En Llamas" → "Evil Dead Burn").
+- [x] Logging accionable agregado: 401 (posible rotación de `x-apikey`) y 403 (posible bloqueo Cloudflare) logueados con mensaje explícito apuntando al runbook; resumen `IMDb ratings: X/Y matched` al final de cada scrape (WARNING si X=0).
+- [x] `docs/RUNBOOK.md` creado — qué hacer cuando: no hay cartelera de hoy, Cinepolis da 401/403, Normandie cambia de HTML, OMDb falla o da `N/A` desactualizado, Playwright no arranca en Docker.
+- [x] `README.md` actualizado (nombre Butaca, arquitectura, variables de entorno correctas, sección producción sin depender de `docker-compose.prod.yml`).
+- [x] CSS: modal de trailer más ancho en desktop (720px) — intento de mitigar que YouTube arranque en 360p (el player elige calidad según tamaño en píxeles).
+- [x] Config limpiado: `SCRAPE_CITY` y `CINEPOLIS_BASE_URL` eliminados (ya no se usan, el scraper nuevo hardcodea los 2 cines que muestra el frontend).
+- [x] **Fix Normandie: 0 funciones para "hoy"** — Normandie cambió el texto del header de semana ("jueves 16 al miércoles 22 de julio" en vez de "jueves 28 de mayo al miércoles 3 de junio", mes ya no se repite en el día de inicio). El regex viejo agarraba el día equivocado como ancla y toda la semana quedaba corrida — solo se guardaba el último día. Reescrito `_parse_week_dates` en `src/scraper/normandie.py` para anclar en el día final (siempre tiene mes explícito) y derivar el inicio. Verificado con scrape real: 22 showtimes en toda la semana, incluye hoy.
+- [x] `docker-compose.vps.yml` + `.env.deploy.example` — deploy a VPS con Traefik (HTTPS automático), separado de `.env` (app) a propósito para no romper `pydantic-settings` (extra_forbidden).
 
-**Contexto recopilado:**
-- `orchestrator.py` purga showtimes `< today` al inicio de cada scrape y reemplaza showtimes por película en cada corrida → si el scrape de hoy corrió OK, "hoy" debería estar.
-- `App.jsx` arma tabs de fecha desde todas las fechas presentes en los showtimes y selecciona la más antigua por default — no hay bug evidente ahí si los datos están limpios.
-- Sospecha principal: el scrape de hoy no corrió o falló (`movies_scraped=0` / status `failed`). Pendiente confirmar con `GET /api/v1/health` o `GET /api/v1/admin/scrape-logs` (requiere `X-API-Key`) — **usuario no compartió el resultado todavía**.
+## Pendiente (próximos pasos)
 
-**Preguntas pendientes antes de continuar:**
-1. ¿Qué devuelve `curl https://cine.lab/api/v1/health` y `curl -H "X-API-Key: ..." https://cine.lab/api/v1/admin/scrape-logs?limit=5`? Sin esto, el diagnóstico queda sin confirmar.
-2. Si el scrape falló: ¿por el anti-bot 302 de Cinépolis (ya documentado en sesión 2026-07-06) o por algo nuevo (p. ej. el feature de OMDb, aunque en teoría no debería romper nada)?
-
-## Completado esta sesión
-
-- [x] Middleware de logging en `src/main.py` — loguea método, path, status, duración (ms) y client IP por request; nivel WARNING si status ≥ 400.
-- [x] `Dockerfile` — agregado `--no-access-log` a uvicorn para no duplicar el log de requests (ahora solo el middleware propio loguea).
-- [x] `frontend/nginx.conf` — `access_log off` para assets estáticos (js/css/svg/png/ico/woff/webmanifest/sw.js), mantiene log solo en rutas relevantes (`/`, index).
-- [x] Feature IMDb rating implementada end-to-end (scraper, DB, API, frontend) — **falta commitear y confirmar `OMDB_API_KEY` en prod**.
-
-## Pendiente (próximos pasos inmediatos)
-
-- [ ] Confirmar causa raíz de "no está lo de hoy" con `/api/v1/health` + `/api/v1/admin/scrape-logs` (ver preguntas arriba).
-- [ ] Commitear feature OMDb (`src/scraper/omdb.py` + cambios relacionados) si se decide dejarla activa.
-- [ ] Setear `OMDB_API_KEY` en `.env` de prod si se quiere el rating visible en cine.lab.
-- [ ] Commitear + pushear cambios de logging (`src/main.py`, `Dockerfile`, `frontend/nginx.conf`) — actualmente sin commitear.
-- [ ] Rebuild + redeploy backend y frontend en prod para que los cambios de logging y OMDb tomen efecto (`docker compose build` + `up -d`, o `/deploy`).
-- [ ] Evaluar retry/backoff en `api_client.py` para el 302 anti-bot de Cinépolis (pendiente desde sesión 2026-07-06, sigue sin resolver).
+- [ ] **Ejecutar el push del mirror a GitHub** (ver plan arriba) — decidido pero no hecho todavía.
+- [ ] Deploy real en el VPS Contabo: falta definir/apuntar `API_DOMAIN` y `FRONTEND_DOMAIN` por DNS antes de poder levantar `docker-compose.vps.yml` ahí.
+- [ ] **TMDb como fallback de rating** — OMDb tiene cache propio que puede quedar desactualizado (rating `N/A` aunque IMDb real ya tenga nota, visto con Evil Dead: En Llamas / `tt31170389`). Evaluar sumar TMDb API como fuente alternativa. No implementado todavía.
+- [ ] Definir proceso de sync gitea → GitHub si se seguirán reflejando cambios ahí (hoy es manual).
+- [ ] Verificar en un tiempo si el `x-apikey` de Cinepolis sigue vigente (puede rotar con sus deploys — ver `docs/RUNBOOK.md` sección 2).
+- [ ] Evaluar retry/backoff más fino si el scraper de Cinépolis empieza a fallar seguido (Cloudflare, no el anti-bot viejo del sitio anterior — ese problema quedó obsoleto con la migración).
 - [ ] Scrapers pendientes (v0.4.0): El Biógrafo, Cineplanet, Centro Arte Alameda.
 - [ ] Filtro por género (v0.3.0).
+- [ ] `CinemaFilter.jsx` sigue siendo código muerto en disco (no importado desde `App.jsx`) — evaluar borrar o reactivar.
 
 ## Notas
 
-- Sandbox de esta sesión no tiene acceso de red a `cine.lab` (handshake TLS cuelga) — cualquier diagnóstico en vivo de prod requiere que el usuario corra los `curl` y pegue el resultado.
-- `_should_scrape_on_startup` en `src/main.py` compara fechas en UTC — si el cron/hora del contenedor no está en la tz esperada, podría desalinearse con "hoy" en Chile. No confirmado como causa, pero vale revisar si el problema persiste.
+- Backend Docker ahora es notablemente más pesado (incluye Chromium vía Playwright) — builds de CI van a tardar más.
 - Correr backend siempre desde raíz del repo (`cd ~/dev/que-ver-cine-hoy && uvicorn src.main:app --reload --port 8000`) — SQLite usa ruta relativa.
 - `POST /api/v1/admin/scrape` es asíncrono — revisar resultado con `GET /api/v1/admin/scrape-logs`.
-- `CinemaFilter.jsx` sigue siendo código muerto en disco (no importado desde `App.jsx`).
+- Ver `docs/RUNBOOK.md` antes de investigar desde cero cualquier falla de scrape — cubre los casos ya conocidos.

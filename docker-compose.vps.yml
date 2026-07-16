@@ -1,0 +1,51 @@
+services:
+  traefik:
+    image: traefik:v3.1
+    restart: unless-stopped
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.le.acme.httpchallenge=true"
+      - "--certificatesresolvers.le.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.le.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "letsencrypt:/letsencrypt"
+
+  api:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.butaca-api.rule=Host(`${API_DOMAIN}`)"
+      - "traefik.http.routers.butaca-api.entrypoints=websecure"
+      - "traefik.http.routers.butaca-api.tls.certresolver=le"
+      - "traefik.http.services.butaca-api.loadbalancer.server.port=8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: "https://${API_DOMAIN}"
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.butaca-frontend.rule=Host(`${FRONTEND_DOMAIN}`)"
+      - "traefik.http.routers.butaca-frontend.entrypoints=websecure"
+      - "traefik.http.routers.butaca-frontend.tls.certresolver=le"
+      - "traefik.http.services.butaca-frontend.loadbalancer.server.port=80"
+
+volumes:
+  letsencrypt:

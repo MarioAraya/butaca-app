@@ -1,4 +1,4 @@
-# Features: que-ver-cine-hoy
+# Features: Butaca
 
 ## v0.1.0 — MVP
 
@@ -43,7 +43,8 @@
 - [x] Filtro por cine (toggle multi-select, mismo estilo que fechas)
 - [x] Detalle de película con trailer embebido (modal bottom sheet)
 - [ ] Filtro por género
-- [x] Rating IMDb (OMDb API) por película, badge en card + link en modal — pendiente commitear y setear `OMDB_API_KEY` en prod
+- [x] Rating IMDb (OMDb API) por película, badge en card + link en modal
+- [ ] TMDb como fallback de rating cuando OMDb tiene cache desactualizado (da `N/A` aunque IMDb real ya tenga nota) — ver `docs/RUNBOOK.md` sección 4
 
 ### v0.4.0 — Más cines (scrapers pendientes)
 
@@ -55,3 +56,9 @@
 - [ ] Alertas de estrenos
 - [ ] Notificaciones por género favorito
 - [ ] Webhook para integraciones
+
+### Infra / Deploy
+- [x] Mirror público en GitHub (`github.com/MarioAraya/butaca-app`) — sin `.drone.yml`/`docker-compose.prod.yml` (IPs privadas de homelab)
+- [x] `docker-compose.vps.yml` con Traefik (HTTPS automático) para deploy en VPS (Contabo)
+- [ ] Deploy real en el VPS Contabo (dominios aún no definidos/apuntados)
+- [ ] Definir proceso de sync gitea → GitHub para cambios futuros (hoy es manual)

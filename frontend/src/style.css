@@ -613,4 +613,8 @@ body {
   .empty-state {
     column-span: all;
   }
+
+  .modal-sheet {
+    max-width: 720px;
+  }
 }

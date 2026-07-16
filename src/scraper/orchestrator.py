@@ -69,6 +69,8 @@ async def run_scrape():
     errors: list[str] = []
     movies_found = 0
     movies_scraped = 0
+    imdb_matched = 0
+    imdb_attempted = 0
 
     rate_limiter = RateLimiter()
     db = SessionLocal()
@@ -105,9 +107,12 @@ async def run_scrape():
                     if not movie_data.get("trailer_url"):
                         movie_data["trailer_url"] = await find_trailer(movie_data.get("title", slug))
 
+                    imdb_attempted += 1
                     movie_data["imdb_rating"], movie_data["imdb_url"] = await find_imdb_rating(
                         movie_data.get("title", slug), movie_data.get("original_title")
                     )
+                    if movie_data["imdb_rating"]:
+                        imdb_matched += 1
 
                     movie = _upsert_movie(db, movie_data)
                     _save_showtimes(db, movie, showtimes_by_slug.get(slug, []))
@@ -137,9 +142,12 @@ async def run_scrape():
                 try:
                     if not movie_data.get("trailer_url"):
                         movie_data["trailer_url"] = await find_trailer(movie_data.get("title", slug))
+                    imdb_attempted += 1
                     movie_data["imdb_rating"], movie_data["imdb_url"] = await find_imdb_rating(
                         movie_data.get("title", slug)
                     )
+                    if movie_data["imdb_rating"]:
+                        imdb_matched += 1
                     movie = _upsert_movie(db, movie_data)
                     _save_showtimes(db, movie, norm_showtimes_by_slug.get(slug, []))
                     db.commit()
@@ -167,6 +175,12 @@ async def run_scrape():
         ))
         db.commit()
         db.close()
+        if imdb_attempted:
+            log_fn = logger.warning if imdb_matched == 0 else logger.info
+            log_fn(
+                "IMDb ratings: %d/%d movies matched (check OMDB_API_KEY / quota if this is unexpectedly low — see docs/RUNBOOK.md)",
+                imdb_matched, imdb_attempted,
+            )
         logger.info(
             "Scrape done: status=%s found=%d scraped=%d errors=%d",
             status, movies_found, movies_scraped, len(errors),

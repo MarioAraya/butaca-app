@@ -124,6 +124,20 @@ async def _graphql(page, url: str, operation_name: str, query: str, variables: d
         """,
         {"url": url, "operationName": operation_name, "query": query, "variables": variables, "apiKey": _API_KEY},
     )
+    if result["status"] == 401:
+        logger.error(
+            "Cinepolis GraphQL %s: 401 Unauthorized — x-apikey likely rotated. "
+            "See docs/RUNBOOK.md to extract the new key from the site's network requests.",
+            operation_name,
+        )
+        raise RuntimeError(f"GraphQL {operation_name}: 401 Unauthorized (stale x-apikey?)")
+    if result["status"] == 403:
+        logger.error(
+            "Cinepolis GraphQL %s: 403 — likely a Cloudflare bot-management block. "
+            "See docs/RUNBOOK.md.",
+            operation_name,
+        )
+        raise RuntimeError(f"GraphQL {operation_name}: 403 (Cloudflare block?)")
     if result["status"] != 200:
         raise RuntimeError(f"GraphQL {operation_name} failed: HTTP {result['status']} — {result['body'][:200]}")
     import json
