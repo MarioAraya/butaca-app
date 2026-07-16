@@ -106,7 +106,7 @@ async def run_scrape():
                         movie_data["trailer_url"] = await find_trailer(movie_data.get("title", slug))
 
                     movie_data["imdb_rating"], movie_data["imdb_url"] = await find_imdb_rating(
-                        movie_data.get("title", slug)
+                        movie_data.get("title", slug), movie_data.get("original_title")
                     )
 
                     movie = _upsert_movie(db, movie_data)
