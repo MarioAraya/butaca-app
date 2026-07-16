@@ -55,26 +55,67 @@ def _parse_time(raw: str) -> time | None:
 
 def _parse_week_dates(header_text: str) -> dict[int, date]:
     """
-    Parse "Semana desde el jueves 28 de mayo al miércoles 3 de junio"
-    into {day_number: date} for all 7 days.
+    Parse a week header into {day_number: date} for all 7 days.
+
+    Two formats seen in the wild:
+      "Semana desde el jueves 28 de mayo al miércoles 3 de junio" (cross-month, both months explicit)
+      "Semana desde el jueves 16 al miércoles 22 de julio" (same-month, month only trails the end day)
+
+    We anchor on the end day (always has an explicit month) and derive the
+    start date from it, since the start day's month is only sometimes present.
     """
-    matches = re.findall(r"(\d+)\s+de\s+(\w+)", header_text.lower())
-    if not matches:
+    match = re.search(
+        r"(\d+)(?:\s+de\s+(\w+))?\s+al\s+\w+\s+(\d+)\s+de\s+(\w+)",
+        header_text.lower(),
+    )
+    if not match:
         return {}
 
-    start_day = int(matches[0][0])
-    start_month = _MONTHS.get(matches[0][1])
-    if not start_month:
+    start_day = int(match.group(1))
+    start_month_name = match.group(2)
+    end_day = int(match.group(3))
+    end_month = _MONTHS.get(match.group(4))
+    if not end_month:
         return {}
 
     today = date.today()
     year = today.year
-    try:
-        start_date = date(year, start_month, start_day)
+
+    def _resolve(month: int, day: int) -> date | None:
+        try:
+            d = date(year, month, day)
+        except ValueError:
+            return None
         # If more than 6 months in the past, it's probably next year
-        if (today - start_date).days > 180:
-            start_date = date(year + 1, start_month, start_day)
-    except ValueError:
+        if (today - d).days > 180:
+            try:
+                d = date(year + 1, month, day)
+            except ValueError:
+                return None
+        return d
+
+    end_date = _resolve(end_month, end_day)
+    if not end_date:
+        return {}
+
+    if start_month_name:
+        start_month = _MONTHS.get(start_month_name)
+        if not start_month:
+            return {}
+        start_date = _resolve(start_month, start_day)
+    elif start_day <= end_day:
+        # Same month as end_date
+        start_date = end_date.replace(day=start_day)
+    else:
+        # Crossed a month boundary but only the end month was written out
+        prev_month = end_date.month - 1 or 12
+        prev_year = end_date.year if end_date.month > 1 else end_date.year - 1
+        try:
+            start_date = date(prev_year, prev_month, start_day)
+        except ValueError:
+            start_date = None
+
+    if not start_date:
         return {}
 
     return {
