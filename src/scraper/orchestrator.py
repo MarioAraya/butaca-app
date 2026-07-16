@@ -1,9 +1,4 @@
-"""Orchestrator: coordinates the scraping pipeline and persists results.
-
-Flow:
-  Phase 1 (API call):   GetNowPlayingByCity → all movies + showtimes in one JSON request
-  Phase 2 (httpx+BS4):  Detail page per movie → synopsis + genres (not in API)
-"""
+"""Orchestrator: coordinates the scraping pipeline and persists results."""
 
 from __future__ import annotations
 
@@ -15,8 +10,7 @@ from sqlalchemy.orm import Session
 
 from src.db.engine import SessionLocal
 from src.db.models import Cinema, Movie, ScrapeLog, Showtime
-from src.scraper.api_client import fetch_now_playing
-from src.scraper.detail import scrape_movie_detail
+from src.scraper.cinepolis import fetch_cinepolis
 from src.scraper.normandie import fetch_normandie
 from src.scraper.omdb import find_imdb_rating
 from src.scraper.rate_limiter import RateLimiter
@@ -86,45 +80,36 @@ async def run_scrape():
         if deleted:
             logger.info("Purged %d past showtimes", deleted)
 
-        # Phase 1: Get all movies + showtimes from the JSON API (1 HTTP request)
-        logger.info("=== Phase 1: Fetching from API ===")
-        api_movies, all_showtimes = await fetch_now_playing(rate_limiter)
-        movies_found = len(api_movies)
+        # Cinepolis: Playwright-driven GraphQL scrape (see src/scraper/cinepolis.py)
+        logger.info("=== Cinepolis scrape ===")
+        try:
+            cinepolis_movies, cinepolis_showtimes = await fetch_cinepolis(rate_limiter)
+        except Exception as e:
+            cinepolis_movies, cinepolis_showtimes = [], []
+            errors.append(f"Cinepolis scrape failed: {e}")
+            logger.exception("Cinepolis scrape failed")
 
-        if not api_movies:
-            errors.append("No movies returned from Cinepolis API")
+        movies_found += len(cinepolis_movies)
+
+        if not cinepolis_movies:
+            errors.append("No movies returned from Cinepolis")
             logger.error("No Cinepolis movies found, skipping Cinepolis phase")
         else:
-            # Build showtime lookup: slug → list of showtime dicts
             showtimes_by_slug: dict[str, list[dict]] = {}
-            for st in all_showtimes:
+            for st in cinepolis_showtimes:
                 showtimes_by_slug.setdefault(st["movie_slug"], []).append(st)
 
-            # Phase 2: Enrich each movie with synopsis + genres from detail page
-            for movie_data in api_movies:
+            for movie_data in cinepolis_movies:
                 slug = movie_data["slug"]
                 try:
-                    logger.info("=== Phase 2: Detail for %s ===", slug)
-                    detail = await scrape_movie_detail(slug, rate_limiter)
+                    if not movie_data.get("trailer_url"):
+                        movie_data["trailer_url"] = await find_trailer(movie_data.get("title", slug))
 
-                    merged = {**movie_data}
-                    if detail:
-                        # Only take fields the API doesn't provide well
-                        for field in ("synopsis", "genres"):
-                            if detail.get(field):
-                                merged[field] = detail[field]
-                        # Prefer API poster/trailer if detail has better version
-                        if not merged.get("poster_url") and detail.get("poster_url"):
-                            merged["poster_url"] = detail["poster_url"]
-
-                    if not merged.get("trailer_url"):
-                        merged["trailer_url"] = await find_trailer(merged.get("title", slug))
-
-                    merged["imdb_rating"], merged["imdb_url"] = await find_imdb_rating(
-                        merged.get("title", slug)
+                    movie_data["imdb_rating"], movie_data["imdb_url"] = await find_imdb_rating(
+                        movie_data.get("title", slug)
                     )
 
-                    movie = _upsert_movie(db, merged)
+                    movie = _upsert_movie(db, movie_data)
                     _save_showtimes(db, movie, showtimes_by_slug.get(slug, []))
                     db.commit()
                     movies_scraped += 1
