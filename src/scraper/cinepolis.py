@@ -15,6 +15,7 @@ a single phase per cinema.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from datetime import date, datetime
@@ -29,6 +30,13 @@ SITE_URL = "https://cinepolis.com/cl"
 GRAPHQL_URL = "https://api-g.cinepolis.com/v2/billboards/graphql"
 BILLBOARD_URL = "https://api-g.cinepolis.com/v1/billboards/graphql"
 MEDIA_BASE_URL = "https://tickets-static-content.cinepolis.com"
+
+# Cloudflare occasionally blocks a single scrape attempt (seen so far only on
+# the unattended 06:00 cron run, never on manual triggers minutes apart) — a
+# fresh browser session/navigation is usually enough to get past it, so retry
+# the whole session rather than just the failing request.
+MAX_ATTEMPTS = 3
+RETRY_BACKOFF_SECONDS = 30
 
 # Cinema slug -> display name. Only cinemas the frontend actually shows
 # (see TARGET_PATTERNS in frontend/src/App.jsx: imperio, estaci, normandie).
@@ -148,7 +156,39 @@ async def _graphql(page, url: str, operation_name: str, query: str, variables: d
 
 
 async def fetch_cinepolis(rate_limiter: RateLimiter) -> tuple[list[dict], list[dict]]:
-    """Fetch movies + showtimes for all configured Cinepolis cinemas."""
+    """Fetch movies + showtimes for all configured Cinepolis cinemas.
+
+    Retries the whole browser session on failure or an empty result (see
+    MAX_ATTEMPTS) — a transient Cloudflare block on one attempt doesn't
+    reliably repeat on the next fresh navigation.
+    """
+    last_error: Exception | None = None
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            movies, showtimes = await _fetch_cinepolis_once(rate_limiter)
+        except Exception as e:
+            last_error = e
+            logger.warning("Cinepolis scrape attempt %d/%d failed: %s", attempt, MAX_ATTEMPTS, e)
+        else:
+            if movies:
+                if attempt > 1:
+                    logger.info("Cinepolis scrape succeeded on attempt %d/%d", attempt, MAX_ATTEMPTS)
+                return movies, showtimes
+            last_error = None
+            logger.warning("Cinepolis scrape attempt %d/%d returned 0 movies", attempt, MAX_ATTEMPTS)
+
+        if attempt < MAX_ATTEMPTS:
+            await asyncio.sleep(RETRY_BACKOFF_SECONDS)
+
+    logger.error(
+        "Cinepolis scrape failed after %d attempts%s — see docs/RUNBOOK.md",
+        MAX_ATTEMPTS, f": {last_error}" if last_error else " (kept returning 0 movies)",
+    )
+    return [], []
+
+
+async def _fetch_cinepolis_once(rate_limiter: RateLimiter) -> tuple[list[dict], list[dict]]:
+    """Single attempt: launch a browser, pass Cloudflare, fetch all cinemas."""
     movies: dict[str, dict] = {}
     showtimes: list[dict] = []
 
