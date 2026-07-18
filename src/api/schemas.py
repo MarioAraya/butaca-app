@@ -66,6 +66,7 @@ class ScrapeLogOut(BaseModel):
     status: str | None
     movies_found: int | None
     movies_scraped: int | None
+    errors: str | None
 
     model_config = {"from_attributes": True}
 
