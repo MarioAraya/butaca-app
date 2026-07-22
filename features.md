@@ -58,7 +58,9 @@
 - [ ] Webhook para integraciones
 
 ### Infra / Deploy
-- [x] Mirror público en GitHub (`github.com/MarioAraya/butaca-app`) — sin `.drone.yml`/`docker-compose.prod.yml` (IPs privadas de homelab)
+- [x] Mirror público en GitHub (`github.com/MarioAraya/butaca-app`), incluye toda la config de deploy (IPs privadas del homelab expuestas a propósito, no son secretas)
 - [x] `docker-compose.vps.yml` con Traefik (HTTPS automático) para deploy en VPS (Contabo)
+- [x] Frontend deployado a Vercel (`frontend-mu-six-9nax6ly7b0.vercel.app`) — build funcionando, **sin backend público conectado todavía**
+- [ ] Backend público (Cloudflare Tunnel o VPS Contabo) — bloqueante para que Vercel sirva datos reales
 - [ ] Deploy real en el VPS Contabo (dominios aún no definidos/apuntados)
 - [ ] Definir proceso de sync gitea → GitHub para cambios futuros (hoy es manual)
