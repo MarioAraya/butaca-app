@@ -34,18 +34,5 @@ services:
       - "traefik.http.routers.butaca-api.tls.certresolver=le"
       - "traefik.http.services.butaca-api.loadbalancer.server.port=8000"
 
-  frontend:
-    build:
-      context: ./frontend
-      args:
-        VITE_API_URL: "https://${API_DOMAIN}"
-    restart: unless-stopped
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.butaca-frontend.rule=Host(`${FRONTEND_DOMAIN}`)"
-      - "traefik.http.routers.butaca-frontend.entrypoints=websecure"
-      - "traefik.http.routers.butaca-frontend.tls.certresolver=le"
-      - "traefik.http.services.butaca-frontend.loadbalancer.server.port=80"
-
 volumes:
   letsencrypt:
