@@ -1,6 +1,6 @@
 # CURRENT — Butaca (ex que-ver-cine-hoy)
 
-Última sesión: 2026-11-13
+Última sesión: 2026-11-14
 
 ## En progreso
 
@@ -14,7 +14,7 @@ Scraper extrae sala por horario (`Showtime.room_name`) y topología de butacas p
 - Payload: filas vienen de fondo a pantalla (`rowIndex` 0 = última fila); `columnIndex` parte en 0 y el sitio lo dibuja descendente (butaca mayor a la izquierda); filas vacías = pasillo horizontal. No hay foto de sala, solo ícono SVG del tipo de butaca.
 - Scrape real 2026-11-13: 21 películas, 508 horarios, 12 precios, 13 salas (Estación Central 7, Vivo Imperio 6), 0 horarios sin sala. Estación Central Sala 1 tiene 366 butacas (real: 4 bloques, 3 pasillos verticales).
 - Fixture real: `tests/fixtures/cinepolis_seats_sala3.json` (Vivo Imperio Sala 3, 151 butacas, 11 filas).
-- `pytest`: 28 passed. `npm run build` del frontend OK.
+- `pytest`: 35 passed. `npm run build` del frontend OK.
 
 **Decisiones tomadas:**
 - Topología de salas en JSON (`data/cinepolis_rooms.json`, gitignored), no en SQLite.
@@ -34,6 +34,10 @@ Scraping, persistencia y visualización de precio mínimo por horario (`MovieCar
 
 ## Completado esta sesión
 
+- [x] Commits en rama `feat/cinepolis-salas-precios` (sin push ni merge): backend precios+salas, frontend, docs, unión de duplicados.
+- [x] Unión de películas duplicadas entre cines: Normandie se adjunta a la película de Cinépolis con mismo título normalizado (`_find_canonical_movie`); `_save_showtimes` ahora solo reemplaza los cines del scraper que llama. Scrape real 2026-11-14: 4 películas unidas, status `success`.
+- [x] Probado modal de sala contra backend real: 13 salas abren con conteo correcto.
+
 - [x] Evaluación de `plan.md` y de la implementación de Gemini: 12 defectos detectados contra el payload real.
 - [x] `rooms_html.py`: columna 0 ya no se pierde, fila A junto a pantalla, numeración descendente, pasillos como separador, tabs sin `onclick` inline.
 - [x] `router.py`: `_showtime_out` devuelve `room_name` (antes siempre `null`).
@@ -51,8 +55,11 @@ Scraping, persistencia y visualización de precio mínimo por horario (`MovieCar
 
 ## Pendiente (próximos pasos inmediatos)
 
-- [ ] Correr scrape completo local (DB local tiene 0 horarios) y probar el modal de sala con datos reales; la prueba visual usó API simulada.
-- [ ] Revisar y commitear el árbol de trabajo (ver pregunta 1).
+- [ ] Merge de `feat/cinepolis-salas-precios` a `main` y push/deploy.
+- [ ] Decidir si se commitea la eliminación de `.github/workflows/pages.yml` y `frontend/public/CNAME` (siguen borrados en el árbol, sin commitear).
+- [ ] Purgar películas sin funciones (146 en `movies`, ~31 activas; el front pide detalle de todas).
+- [ ] Endpoint único de cartelera para evitar 1+N requests al cargar.
+- [ ] Alerta cuando el scrape no termina en `success`.
 - [ ] Verificar contra el sitio si Estación Central realmente no tiene pasillos horizontales (ninguna sala los detectó).
 - [ ] Probar formatos distintos de 2D/3D cuando aparezcan (4DX, VIP…).
 - [ ] `seatStyle` solo se vio `Normal` (2.322 butacas); clase `.seat.special` sin ejercitar.
@@ -64,6 +71,10 @@ Scraping, persistencia y visualización de precio mínimo por horario (`MovieCar
 - [ ] Filtro por género en el frontend (v0.3.0).
 
 ## Notas
+
+- `experience` observado en vivo: `TRADICIONAL` y `4DX` (Estación Central Sala 2); ambos responden bien en `Seats`.
+- Si Cinépolis falla con `Executable doesn't exist ... chromium_headless_shell`, correr `python3 -m playwright install chromium`.
+- El `uvicorn` local sin `--reload` no toma código nuevo: reiniciar para ver `/api/v1/rooms`.
 
 - Dos agentes editaron el mismo árbol (Gemini cine1 + Claude). Sin colisiones detectadas, pero revisar el diff completo antes de commitear.
 - Regenerar salas sin scrape completo de DB:

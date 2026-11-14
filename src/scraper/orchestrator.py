@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import unicodedata
 from datetime import datetime, date
 
 from sqlalchemy.orm import Session
@@ -22,6 +23,7 @@ from src.scraper.youtube import find_trailer
 logger = logging.getLogger(__name__)
 
 
+NORMANDIE_SLUG_PREFIX = "normandie-"
 ROOMS_JSON_PATH = "data/cinepolis_rooms.json"
 ROOMS_HTML_PATH = "docs/SALAS_CINEPOLIS.html"
 
@@ -89,8 +91,44 @@ def _get_or_create_cinema(db: Session, name: str) -> Cinema:
     return cinema
 
 
-def _save_showtimes(db: Session, movie: Movie, showtimes_data: list[dict]):
-    db.query(Showtime).filter(Showtime.movie_id == movie.id).delete()
+def _title_key(title: str | None) -> str:
+    """Normalize a title for cross-cinema matching: no accents, punctuation or case."""
+    text = unicodedata.normalize("NFKD", title or "")
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+def _find_canonical_movie(db: Session, title: str) -> Movie | None:
+    """Find a movie from a richer source (Cinepolis) with the same normalized title.
+
+    Normandie only provides a title, so when the same film also plays at Cinepolis
+    its showtimes are attached to that record (poster, synopsis, rating) instead of
+    creating a second, bare `normandie-*` movie.
+    """
+    key = _title_key(title)
+    if not key:
+        return None
+    candidates = [
+        m for m in db.query(Movie).filter(~Movie.slug.startswith(NORMANDIE_SLUG_PREFIX)).all()
+        if key in (_title_key(m.title), _title_key(m.original_title))
+    ]
+    if not candidates:
+        return None
+    # Prefer the record that is currently in theatres, then the most recently updated
+    candidates.sort(key=lambda m: (bool(m.showtimes), m.updated_at or datetime.min), reverse=True)
+    return candidates[0]
+
+
+def _save_showtimes(db: Session, movie: Movie, showtimes_data: list[dict], scope_cinemas: set[str]):
+    """Replace the movie's showtimes at `scope_cinemas`, leaving other cinemas untouched.
+
+    A movie can have showtimes from several scrapers, so each one only owns its cinemas.
+    """
+    scope_ids = [_get_or_create_cinema(db, name).id for name in scope_cinemas]
+    if scope_ids:
+        db.query(Showtime).filter(
+            Showtime.movie_id == movie.id, Showtime.cinema_id.in_(scope_ids)
+        ).delete(synchronize_session=False)
     seen: set[tuple] = set()
     for st in showtimes_data:
         cinema = _get_or_create_cinema(db, st["cinema_name"])
@@ -176,6 +214,7 @@ async def run_scrape():
             showtimes_by_slug: dict[str, list[dict]] = {}
             for st in cinepolis_showtimes:
                 showtimes_by_slug.setdefault(st["movie_slug"], []).append(st)
+            cinepolis_cinemas = {st["cinema_name"] for st in cinepolis_showtimes}
 
             for movie_data in cinepolis_movies:
                 slug = movie_data["slug"]
@@ -191,7 +230,7 @@ async def run_scrape():
                         imdb_matched += 1
 
                     movie = _upsert_movie(db, movie_data)
-                    _save_showtimes(db, movie, showtimes_by_slug.get(slug, []))
+                    _save_showtimes(db, movie, showtimes_by_slug.get(slug, []), cinepolis_cinemas)
                     db.commit()
                     movies_scraped += 1
                     st_count = len(showtimes_by_slug.get(slug, []))
@@ -222,9 +261,21 @@ async def run_scrape():
             for st in norm_showtimes:
                 norm_showtimes_by_slug.setdefault(st["movie_slug"], []).append(st)
 
+            norm_cinemas = {st["cinema_name"] for st in norm_showtimes}
+
             for movie_data in norm_movies:
                 slug = movie_data["slug"]
                 try:
+                    canonical = _find_canonical_movie(db, movie_data.get("title", ""))
+                    if canonical:
+                        _save_showtimes(db, canonical, norm_showtimes_by_slug.get(slug, []), norm_cinemas)
+                        # Drop the bare duplicate left by scrapes from before the merge
+                        db.query(Movie).filter(Movie.slug == slug).delete()
+                        db.commit()
+                        movies_scraped += 1
+                        logger.info("Saved Normandie: %s merged into %s (%d showtimes)",
+                                    slug, canonical.slug, len(norm_showtimes_by_slug.get(slug, [])))
+                        continue
                     if not movie_data.get("trailer_url"):
                         movie_data["trailer_url"] = await find_trailer(movie_data.get("title", slug))
                     imdb_attempted += 1
@@ -234,7 +285,7 @@ async def run_scrape():
                     if movie_data["imdb_rating"]:
                         imdb_matched += 1
                     movie = _upsert_movie(db, movie_data)
-                    _save_showtimes(db, movie, norm_showtimes_by_slug.get(slug, []))
+                    _save_showtimes(db, movie, norm_showtimes_by_slug.get(slug, []), norm_cinemas)
                     db.commit()
                     movies_scraped += 1
                     logger.info("Saved Normandie: %s (%d showtimes)", slug, len(norm_showtimes_by_slug.get(slug, [])))
