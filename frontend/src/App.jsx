@@ -5,6 +5,7 @@ import DateTabs from './components/DateTabs'
 import CinemaFilter from './components/CinemaFilter'
 import MovieCard from './components/MovieCard'
 import MovieModal from './components/MovieModal'
+import RoomModal from './components/RoomModal'
 
 const TARGET_PATTERNS = ['imperio', 'estaci', 'normandie']
 
@@ -22,6 +23,8 @@ export default function App() {
   const [selectedCinemas, setSelectedCinemas] = useState(new Set())
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [selectedMovie, setSelectedMovie] = useState(null)
+  const [selectedRoom, setSelectedRoom] = useState(null)
+  const closeRoom = useCallback(() => setSelectedRoom(null), [])
 
   useEffect(() => {
     const onOnline = () => setIsOnline(true)
@@ -140,12 +143,16 @@ export default function App() {
           </div>
         ) : (
           visibleMovies.map(({ movie, byCinema }) => (
-            <MovieCard key={movie.id} movie={movie} byCinema={byCinema} onSelect={() => setSelectedMovie(movie)} />
+            <MovieCard key={movie.id} movie={movie} byCinema={byCinema} onSelect={() => setSelectedMovie(movie)}
+              onRoomSelect={(cinemaName, roomName) => setSelectedRoom({ cinemaName, roomName })} />
           ))
         )}
       </main>
       {selectedMovie && (
         <MovieModal movie={selectedMovie} onClose={() => setSelectedMovie(null)} />
+      )}
+      {selectedRoom && (
+        <RoomModal cinemaName={selectedRoom.cinemaName} roomName={selectedRoom.roomName} onClose={closeRoom} />
       )}
     </div>
   )
