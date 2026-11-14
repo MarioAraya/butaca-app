@@ -67,9 +67,28 @@ class Showtime(Base):
     show_time = Column(Time, nullable=False)
     language = Column(String)
     format = Column(String)
+    room_name = Column(String, nullable=True)
 
     movie = relationship("Movie", back_populates="showtimes")
     cinema = relationship("Cinema", back_populates="showtimes")
+
+
+class TicketPrice(Base):
+    __tablename__ = "ticket_prices"
+    __table_args__ = (
+        UniqueConstraint("cinema_id", "format", "ticket_type_code"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    cinema_id = Column(Integer, ForeignKey("cinemas.id"), nullable=False)
+    format = Column(String)
+    ticket_type_code = Column(String, nullable=False)
+    description = Column(String, nullable=False)
+    price_cents = Column(Integer, nullable=False)
+    booking_fee_cents = Column(Integer)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    cinema = relationship("Cinema")
 
 
 class ScrapeLog(Base):

@@ -11,12 +11,16 @@ def create_tables():
 
 def _add_missing_columns():
     inspector = inspect(engine)
-    existing_columns = {col["name"] for col in inspector.get_columns("movies")}
-    new_columns = {
+    existing_movies = {col["name"] for col in inspector.get_columns("movies")}
+    new_movie_columns = {
         "imdb_rating": "VARCHAR",
         "imdb_url": "VARCHAR",
     }
     with engine.begin() as conn:
-        for name, sql_type in new_columns.items():
-            if name not in existing_columns:
+        for name, sql_type in new_movie_columns.items():
+            if name not in existing_movies:
                 conn.execute(text(f"ALTER TABLE movies ADD COLUMN {name} {sql_type}"))
+
+        existing_showtimes = {col["name"] for col in inspector.get_columns("showtimes")}
+        if "room_name" not in existing_showtimes:
+            conn.execute(text("ALTER TABLE showtimes ADD COLUMN room_name VARCHAR"))

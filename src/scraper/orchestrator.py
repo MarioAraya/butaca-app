@@ -4,19 +4,64 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import re
 from datetime import datetime, date
 
 from sqlalchemy.orm import Session
 
 from src.db.engine import SessionLocal
-from src.db.models import Cinema, Movie, ScrapeLog, Showtime
+from src.db.models import Cinema, Movie, ScrapeLog, Showtime, TicketPrice
 from src.scraper.cinepolis import fetch_cinepolis
 from src.scraper.normandie import fetch_normandie
 from src.scraper.omdb import find_imdb_rating
 from src.scraper.rate_limiter import RateLimiter
+from src.scraper.rooms_html import generate_rooms_html
 from src.scraper.youtube import find_trailer
 
 logger = logging.getLogger(__name__)
+
+
+ROOMS_JSON_PATH = "data/cinepolis_rooms.json"
+ROOMS_HTML_PATH = "docs/SALAS_CINEPOLIS.html"
+
+
+def _room_sort_key(room: dict) -> tuple:
+    match = re.search(r"\d+", room.get("room_name") or "")
+    return (room.get("cinema_name") or "", int(match.group(0)) if match else 999, room.get("room_name") or "")
+
+
+def load_rooms(json_path: str = ROOMS_JSON_PATH) -> list[dict]:
+    """Read the persisted room layouts; empty list if never scraped or unreadable."""
+    if not os.path.exists(json_path):
+        return []
+    try:
+        with open(json_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        logger.exception("Could not read %s", json_path)
+        return []
+    return data if isinstance(data, list) else []
+
+
+def _save_rooms(rooms: list[dict], json_path: str = ROOMS_JSON_PATH, html_path: str = ROOMS_HTML_PATH) -> list[dict]:
+    """Merge freshly scraped rooms into the persisted JSON and regenerate the HTML.
+
+    New rooms replace existing ones (keyed by cinema_id + room_name); rooms absent
+    from this scrape (failed fetch / no showtime today) keep their last known layout.
+    """
+    merged: dict[tuple, dict] = {
+        (r.get("cinema_id"), r.get("room_name")): r for r in load_rooms(json_path)
+    }
+    for r in rooms:
+        merged[(r.get("cinema_id"), r.get("room_name"))] = r
+
+    result = sorted(merged.values(), key=_room_sort_key)
+    os.makedirs(os.path.dirname(json_path) or ".", exist_ok=True)
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(result, f, indent=2, ensure_ascii=False)
+    generate_rooms_html(result, html_path)
+    return result
 
 
 def _upsert_movie(db: Session, data: dict) -> Movie:
@@ -60,6 +105,31 @@ def _save_showtimes(db: Session, movie: Movie, showtimes_data: list[dict]):
             show_time=st["show_time"],
             language=st.get("language"),
             format=st.get("format"),
+            room_name=st.get("room_name"),
+        ))
+
+
+def _save_ticket_prices(db: Session, prices_data: list[dict]):
+    cinema_names = {p["cinema_name"] for p in prices_data}
+    for cinema_name in cinema_names:
+        cinema = _get_or_create_cinema(db, cinema_name)
+        db.query(TicketPrice).filter(TicketPrice.cinema_id == cinema.id).delete()
+    seen: set[tuple] = set()
+    for p in prices_data:
+        if p.get("price_cents") is None or not p.get("ticket_type_code"):
+            continue
+        cinema = _get_or_create_cinema(db, p["cinema_name"])
+        key = (cinema.id, p.get("format"), p["ticket_type_code"])
+        if key in seen:
+            continue
+        seen.add(key)
+        db.add(TicketPrice(
+            cinema_id=cinema.id,
+            format=p.get("format"),
+            ticket_type_code=p["ticket_type_code"],
+            description=p.get("description") or p["ticket_type_code"],
+            price_cents=p["price_cents"],
+            booking_fee_cents=p.get("booking_fee_cents"),
         ))
 
 
@@ -85,9 +155,9 @@ async def run_scrape():
         # Cinepolis: Playwright-driven GraphQL scrape (see src/scraper/cinepolis.py)
         logger.info("=== Cinepolis scrape ===")
         try:
-            cinepolis_movies, cinepolis_showtimes = await fetch_cinepolis(rate_limiter)
+            cinepolis_movies, cinepolis_showtimes, cinepolis_prices, cinepolis_rooms = await fetch_cinepolis(rate_limiter)
         except Exception as e:
-            cinepolis_movies, cinepolis_showtimes = [], []
+            cinepolis_movies, cinepolis_showtimes, cinepolis_prices, cinepolis_rooms = [], [], [], []
             errors.append(f"Cinepolis scrape failed: {e}")
             logger.exception("Cinepolis scrape failed")
 
@@ -97,6 +167,12 @@ async def run_scrape():
             errors.append("No movies returned from Cinepolis")
             logger.error("No Cinepolis movies found, skipping Cinepolis phase")
         else:
+            if cinepolis_rooms:
+                try:
+                    merged_rooms = _save_rooms(cinepolis_rooms)
+                    logger.info("Saved %s and %s (%d rooms, %d from this scrape)", ROOMS_JSON_PATH, ROOMS_HTML_PATH, len(merged_rooms), len(cinepolis_rooms))
+                except Exception as e:
+                    logger.exception("Failed to generate rooms data/html: %s", e)
             showtimes_by_slug: dict[str, list[dict]] = {}
             for st in cinepolis_showtimes:
                 showtimes_by_slug.setdefault(st["movie_slug"], []).append(st)
@@ -126,6 +202,15 @@ async def run_scrape():
                     msg = f"Error processing {slug}: {e}"
                     errors.append(msg)
                     logger.exception(msg)
+
+            try:
+                _save_ticket_prices(db, cinepolis_prices)
+                db.commit()
+                logger.info("Saved %d Cinepolis ticket prices", len(cinepolis_prices))
+            except Exception as e:
+                db.rollback()
+                errors.append(f"Error saving ticket prices: {e}")
+                logger.exception("Error saving ticket prices")
 
         # Normandie scrape (no detail phase — title + showtimes only)
         logger.info("=== Normandie scrape ===")
