@@ -43,6 +43,9 @@
 - [x] Filtro por cine (toggle multi-select, mismo estilo que fechas)
 - [x] Detalle de película con trailer embebido (modal bottom sheet)
 - [ ] Filtro por género
+- [x] Precio mínimo de entrada por horario (Cinépolis, `TicketPrice`) — sin commitear
+- [x] Sala por horario (`room_name`) + mapa de butacas por sala (`docs/SALAS_CINEPOLIS.html`) — sin commitear
+- [x] Mapa de sala en la app: `GET /api/v1/rooms` + modal al tocar la sala — sin commitear
 - [x] Rating IMDb (OMDb API) por película, badge en card + link en modal
 - [ ] TMDb como fallback de rating cuando OMDb tiene cache desactualizado (da `N/A` aunque IMDb real ya tenga nota) — ver `docs/RUNBOOK.md` sección 4
 

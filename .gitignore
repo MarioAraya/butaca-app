@@ -15,3 +15,16 @@ data/*.db-shm
 /frontend/node_modules/
 /frontend/.env
 screenshots/
+
+# Exploration artifacts (cinepolis rooms investigation)
+scratch/
+scratch_*.png
+captured_*.json
+response_200_*.json
+interesting_response.json
+bundle_search_results.json
+seat_response_sample.json
+*_query.txt
+data/cinepolis_rooms.json
+.DS_Store
+docs/SALAS_CINEPOLIS.html

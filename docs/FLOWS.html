@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Butaca — Diagramas de Flujo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    max-width: 960px;
+    margin: 40px auto;
+    padding: 0 20px;
+    background: #0d1117;
+    color: #e6edf3;
+    line-height: 1.5;
+  }
+  h1 { border-bottom: 2px solid #30363d; padding-bottom: 10px; }
+  h2 { margin-top: 48px; color: #58a6ff; }
+  .diagram {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 24px;
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+  p.desc { color: #8b949e; }
+</style>
+</head>
+<body>
+<h1>Butaca (que-ver-cine-hoy) — Diagramas de Flujo</h1>
+<p class="desc">Scraper de cartelera de cines de Santiago + API + frontend PWA.</p>
+
+<h2>1. Flujo principal — usuario final (SPA)</h2>
+<div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    A[Carga app] --> B[GET /api/v1/movies]
+    B --> C[Por cada película: GET /api/v1/movies/slug]
+    C --> D[Filtra showtimes solo de cines target]
+    D --> E[Calcula fechas disponibles y arma tabs]
+    E --> F[Grilla de MovieCard agrupada por cine, filtrada por fecha]
+    F --> G{Interacción}
+    G -->|Cambiar tab de fecha| F
+    G -->|Toggle filtro de cine| F
+    G -->|Click en MovieCard| H[Abre MovieModal: trailer, sinopsis, rating IMDb]
+    G -->|Click refresh| B
+    H -->|Cerrar / Escape| F
+</pre>
+</div>
+
+<h2>2. Flujo de scraping — backend (diario o manual)</h2>
+<div class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+    participant Cron as APScheduler (06:00 CLT)
+    participant Orch as orchestrator.run_scrape
+    participant CP as cinepolis.py (Playwright)
+    participant Norm as normandie.py (httpx+BS4)
+    participant YT as youtube.py (yt-dlp)
+    participant OMDb as omdb.py
+    participant DB as SQLite
+
+    Cron->>Orch: run_scrape()
+    Orch->>DB: purge showtimes pasados
+    Orch->>CP: fetch_cinepolis()
+    CP->>CP: Playwright abre cinepolis.com/cl (pasa Cloudflare)
+    CP->>CP: GraphQL Movies + Billboard + Tickets
+    CP-->>Orch: movies, showtimes, prices
+    loop por película Cinépolis
+        Orch->>YT: find_trailer(title) si falta
+        Orch->>OMDb: find_imdb_rating(title)
+        Orch->>DB: upsert movie + showtimes
+    end
+    Orch->>DB: guarda ticket_prices
+    Orch->>Norm: fetch_normandie()
+    Norm->>Norm: GET normandie.cl/cartelera + parse HTML
+    Norm-->>Orch: movies, showtimes
+    loop por película Normandie
+        Orch->>YT: find_trailer(title)
+        Orch->>OMDb: find_imdb_rating(title)
+        Orch->>DB: upsert movie + showtimes
+    end
+    Orch->>DB: guarda ScrapeLog (status, counts, errors)
+</pre>
+</div>
+
+<h2>3. Arquitectura de componentes</h2>
+<div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    subgraph Frontend
+        SPA[Preact SPA]
+    end
+    subgraph Backend
+        API[FastAPI]
+        Sched[APScheduler]
+        DB[(SQLite)]
+    end
+    subgraph Scrapers
+        CP[Cinepolis: Playwright + GraphQL]
+        NM[Normandie: httpx + BS4]
+    end
+    subgraph Externas
+        CPGQL[api-g.cinepolis.com]
+        NMSITE[normandie.cl]
+        OMDB[OMDb API]
+        YTB[YouTube via yt-dlp]
+    end
+
+    SPA -->|GET /api/v1/movies| API
+    API --> DB
+    Sched -->|06:00 CLT| CP
+    Sched --> NM
+    CP --> CPGQL
+    NM --> NMSITE
+    CP --> OMDB
+    NM --> OMDB
+    CP --> YTB
+    NM --> YTB
+    CP --> DB
+    NM --> DB
+</pre>
+</div>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+</script>
+</body>
+</html>
