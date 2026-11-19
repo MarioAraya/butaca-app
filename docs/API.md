@@ -12,6 +12,7 @@ Swagger UI disponible en `/docs`.
 | GET | `/cinemas` | Lista cines | No |
 | GET | `/cinemas/{id}/showtimes` | Showtimes de un cine (`date`) | No |
 | GET | `/showtimes` | Todos los showtimes (`date`, `cinema_id`, `movie_slug`) | No |
+| GET | `/billboard` | Cartelera completa: películas con funciones desde hoy, con horarios, sala y precios. Una sola request para el frontend | No |
 | GET | `/rooms` | Topología de butacas por sala Cinépolis (`cinema_name`, `room_name`); lee `data/cinepolis_rooms.json` | No |
 | GET | `/health` | Estado + último scrape + conteo de películas | No |
 | POST | `/admin/scrape` | Dispara scrape manual en background | Sí (`X-API-Key`) |

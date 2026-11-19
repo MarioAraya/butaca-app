@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'preact/hooks'
-import { fetchMovies, fetchMovieDetail } from './api'
+import { fetchBillboard } from './api'
 import Header from './components/Header'
 import DateTabs from './components/DateTabs'
 import CinemaFilter from './components/CinemaFilter'
@@ -41,8 +41,7 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      const movies = await fetchMovies()
-      const details = await Promise.all(movies.map((m) => fetchMovieDetail(m.slug)))
+      const details = await fetchBillboard()
 
       const filtered = details
         .map((d) => ({

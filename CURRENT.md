@@ -1,6 +1,6 @@
 # CURRENT — Butaca (ex que-ver-cine-hoy)
 
-Última sesión: 2026-11-14
+Última sesión: 2026-11-19
 
 ## En progreso
 
@@ -14,7 +14,7 @@ Scraper extrae sala por horario (`Showtime.room_name`) y topología de butacas p
 - Payload: filas vienen de fondo a pantalla (`rowIndex` 0 = última fila); `columnIndex` parte en 0 y el sitio lo dibuja descendente (butaca mayor a la izquierda); filas vacías = pasillo horizontal. No hay foto de sala, solo ícono SVG del tipo de butaca.
 - Scrape real 2026-11-13: 21 películas, 508 horarios, 12 precios, 13 salas (Estación Central 7, Vivo Imperio 6), 0 horarios sin sala. Estación Central Sala 1 tiene 366 butacas (real: 4 bloques, 3 pasillos verticales).
 - Fixture real: `tests/fixtures/cinepolis_seats_sala3.json` (Vivo Imperio Sala 3, 151 butacas, 11 filas).
-- `pytest`: 35 passed. `npm run build` del frontend OK.
+- `pytest`: 39 passed. `npm run build` del frontend OK.
 
 **Decisiones tomadas:**
 - Topología de salas en JSON (`data/cinepolis_rooms.json`, gitignored), no en SQLite.
@@ -33,6 +33,8 @@ Scraper extrae sala por horario (`Showtime.room_name`) y topología de butacas p
 Scraping, persistencia y visualización de precio mínimo por horario (`MovieCard.jsx`, `formatPrice`). Mismo árbol de trabajo que el punto 1.
 
 ## Completado esta sesión
+
+- [x] Purga de películas sin funciones, `GET /api/v1/billboard` (frontend con 1 request), gzip, alerta por `ALERT_WEBHOOK_URL`. Detalle en `docs/SALAS_Y_DEDUPE.md`.
 
 - [x] Commits en rama `feat/cinepolis-salas-precios` (sin push ni merge): backend precios+salas, frontend, docs, unión de duplicados.
 - [x] Unión de películas duplicadas entre cines: Normandie se adjunta a la película de Cinépolis con mismo título normalizado (`_find_canonical_movie`); `_save_showtimes` ahora solo reemplaza los cines del scraper que llama. Scrape real 2026-11-14: 4 películas unidas, status `success`.
@@ -55,11 +57,11 @@ Scraping, persistencia y visualización de precio mínimo por horario (`MovieCar
 
 ## Pendiente (próximos pasos inmediatos)
 
+- [ ] Configurar `ALERT_WEBHOOK_URL` en el homelab.
+- [ ] Normandie no resuelve DNS en el Mac (caché de `mDNSResponder`); revisar también en el homelab.
+- [ ] Cambios ajenos sin commitear en `MovieModal.jsx` y `style.css` (badges de idioma): decidir si se commitean.
 - [ ] Merge de `feat/cinepolis-salas-precios` a `main` y push/deploy.
 - [ ] Decidir si se commitea la eliminación de `.github/workflows/pages.yml` y `frontend/public/CNAME` (siguen borrados en el árbol, sin commitear).
-- [ ] Purgar películas sin funciones (146 en `movies`, ~31 activas; el front pide detalle de todas).
-- [ ] Endpoint único de cartelera para evitar 1+N requests al cargar.
-- [ ] Alerta cuando el scrape no termina en `success`.
 - [ ] Verificar contra el sitio si Estación Central realmente no tiene pasillos horizontales (ninguna sala los detectó).
 - [ ] Probar formatos distintos de 2D/3D cuando aparezcan (4DX, VIP…).
 - [ ] `seatStyle` solo se vio `Normal` (2.322 butacas); clase `.seat.special` sin ejercitar.

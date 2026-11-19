@@ -9,7 +9,10 @@ import re
 import unicodedata
 from datetime import datetime, date
 
+import httpx
 from sqlalchemy.orm import Session
+
+from src.config import settings
 
 from src.db.engine import SessionLocal
 from src.db.models import Cinema, Movie, ScrapeLog, Showtime, TicketPrice
@@ -171,6 +174,40 @@ def _save_ticket_prices(db: Session, prices_data: list[dict]):
         ))
 
 
+def _purge_movies_without_showtimes(db: Session) -> int:
+    """Delete movies that no longer have any showtime.
+
+    Safe after a partial scrape: a scraper that failed doesn't delete its showtimes,
+    so only films that every source has dropped (or whose dates passed) are removed.
+    A film that comes back is re-created, with its rating/trailer looked up again.
+    """
+    stale = db.query(Movie).filter(~Movie.showtimes.any()).all()
+    for movie in stale:
+        db.delete(movie)
+    return len(stale)
+
+
+async def _send_alert(status: str, errors: list[str], movies_scraped: int, url: str | None = None) -> None:
+    """POST a short text summary to ALERT_WEBHOOK_URL. Never raises."""
+    url = settings.alert_webhook_url if url is None else url
+    if not url:
+        return
+    lines = [f"Butaca scrape {status}: {movies_scraped} películas guardadas, {len(errors)} errores"]
+    lines += [f"- {e[:200]}" for e in errors[:5]]
+    if len(errors) > 5:
+        lines.append(f"... y {len(errors) - 5} más (GET /api/v1/admin/scrape-logs)")
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(
+                url,
+                content="\n".join(lines).encode("utf-8"),
+                headers={"Title": f"Butaca scrape {status}", "Tags": "warning"},
+            )
+            r.raise_for_status()
+    except Exception:
+        logger.exception("Failed to send scrape alert")
+
+
 async def run_scrape():
     """Execute the scraping pipeline."""
     started_at = datetime.utcnow()
@@ -299,6 +336,16 @@ async def run_scrape():
             errors.append(msg)
             logger.exception(msg)
 
+        try:
+            purged = _purge_movies_without_showtimes(db)
+            db.commit()
+            if purged:
+                logger.info("Purged %d movies without showtimes", purged)
+        except Exception as e:
+            db.rollback()
+            errors.append(f"Error purging movies: {e}")
+            logger.exception("Error purging movies")
+
     finally:
         status = "success" if not errors else ("partial" if movies_scraped > 0 else "failed")
         db.add(ScrapeLog(
@@ -321,3 +368,5 @@ async def run_scrape():
             "Scrape done: status=%s found=%d scraped=%d errors=%d",
             status, movies_found, movies_scraped, len(errors),
         )
+        if status != "success":
+            await _send_alert(status, errors, movies_scraped)

@@ -76,6 +76,37 @@ def list_movies(
     return q.order_by(Movie.title).all()
 
 
+def _movie_detail(movie: Movie, price_map: dict) -> MovieDetail:
+    showtimes = sorted(movie.showtimes, key=lambda st: (st.show_date, st.show_time))
+    return MovieDetail(
+        **{c.name: getattr(movie, c.name) for c in Movie.__table__.columns},
+        showtimes=[_showtime_out(st, st.cinema_id, st.cinema.name, price_map) for st in showtimes],
+    )
+
+
+@router.get("/billboard", response_model=list[MovieDetail])
+def billboard(db: Session = Depends(get_db)):
+    """Every movie with upcoming showtimes, showtimes and prices included.
+
+    One request for the whole listing (the frontend used to call /movies and then
+    /movies/{slug} for each one).
+    """
+    movies = (
+        db.query(Movie)
+        .options(joinedload(Movie.showtimes).joinedload(Showtime.cinema))
+        .filter(Movie.showtimes.any(Showtime.show_date >= date.today()))
+        .order_by(Movie.title)
+        .all()
+    )
+    price_map = _price_lookup(db, {st.cinema_id for m in movies for st in m.showtimes})
+    result = []
+    for movie in movies:
+        detail = _movie_detail(movie, price_map)
+        detail.showtimes = [st for st in detail.showtimes if st.show_date >= date.today()]
+        result.append(detail)
+    return result
+
+
 @router.get("/movies/{slug}", response_model=MovieDetail)
 def get_movie(slug: str, db: Session = Depends(get_db)):
     movie = (
@@ -88,14 +119,7 @@ def get_movie(slug: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Movie not found")
 
     price_map = _price_lookup(db, {st.cinema_id for st in movie.showtimes})
-    showtimes = [
-        _showtime_out(st, st.cinema_id, st.cinema.name, price_map)
-        for st in movie.showtimes
-    ]
-    return MovieDetail(
-        **{c.name: getattr(movie, c.name) for c in Movie.__table__.columns},
-        showtimes=showtimes,
-    )
+    return _movie_detail(movie, price_map)
 
 
 @router.get("/movies/{slug}/showtimes", response_model=list[ShowtimeOut])
