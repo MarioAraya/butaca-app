@@ -10,6 +10,7 @@ Resumen del trabajo del 13–14 de noviembre de 2026. Rama: `feat/cinepolis-sala
 | `1e4e0a2` | Frontend: precio y sala en cada horario, modal con mapa de butacas |
 | `9db77e8` | Docs, `AGENTS.md`, `.agents/`, `.gitignore` |
 | `086fcbc` | Unión de películas duplicadas entre cines |
+| `2ca427c` | Endpoint único `/billboard`, purga de películas sin funciones, alertas de scrape |
 
 Precios y salas van juntos en un solo commit de backend: los cambios están mezclados en los mismos archivos.
 
