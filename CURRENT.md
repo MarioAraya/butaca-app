@@ -1,46 +1,79 @@
 # CURRENT — Butaca (ex que-ver-cine-hoy)
 
-Última sesión: 2026-07-19
+Última sesión: 2026-11-21
 
 ## En progreso
 
-### Backend público para el deploy en Vercel — BLOQUEADO, necesita decisión
+### Rama `feat/cinepolis-salas-precios` lista para merge (sin push)
 
-Se deployó el frontend a Vercel (`https://frontend-mu-six-9nax6ly7b0.vercel.app`, build OK, HTTP 200) con `VITE_API_URL=https://cine-api.lab` seteada como env var de producción en el proyecto Vercel. **Esto no sirve datos reales**: `cine-api.lab` es DNS local (`.lab` solo resuelve vía `/etc/hosts` en las máquinas del usuario) apuntando a una IP privada (192.168.0.104) — Vercel (servidor público) no puede resolverlo ni llegar a esa IP. El sitio va a mostrar "Failed to fetch" hasta resolver esto.
+Precios, salas y mapas de butacas de Cinépolis, unión de duplicados con Normandie, endpoint único de cartelera, purga de películas muertas y alerta de scrape. Todo commiteado en la rama; falta merge a `main` y deploy. Detalle completo en `docs/SALAS_Y_DEDUPE.md`.
 
-**Decisión pendiente del usuario — dos caminos:**
-1. Exponer `cine-api.lab` (o un dominio real) a internet — opción más simple: Cloudflare Tunnel (no requiere abrir puertos ni IP fija).
-2. Mover el backend al VPS Contabo (ya hay `docker-compose.vps.yml` con Traefik+HTTPS real listo para eso, ver sesión anterior) — el frontend de Vercel apuntaría ahí en vez de al homelab.
+**Contexto recopilado:**
+- Commits: `66e0894` backend precios+salas, `1e4e0a2` frontend, `9db77e8` docs, `086fcbc` unión de duplicados, `2ca427c` billboard + purga + alertas.
+- Cinépolis: `Billboard` v2 (`/v2/billboards/graphql`) trae `screen` + `sessionId`; `Seats` en `POST /v1/ticket/graphql` con `{countryId, sessionId, cinemaVistaId, experience}`.
+- Payload de butacas: `rowIndex` 0 = última fila; `columnIndex` parte en 0 y se dibuja descendente; filas vacías = pasillo.
+- Último scrape real (2026-11-19): `partial` por DNS de Normandie; purga dejó 21 películas, todas con funciones.
+- `pytest`: 39 passed. Frontend probado con Playwright contra backend real: 1 request, 13 salas abren bien.
 
-Ninguna se implementó todavía — quedó explícitamente pausado a pedido del usuario ("deploy solo frontend estático, sin backend vivo, por ahora").
+**Decisiones tomadas:**
+- Topología de salas en `data/cinepolis_rooms.json` (gitignored, merge por `(cinema_id, room_name)`), no en SQLite.
+- `/api/v1/rooms` no expone ocupación (es de la sesión muestreada, no de la función que mira el usuario).
+- Unión de duplicados solo por título exacto normalizado (sin fuzzy): "JU-ON" variantes no se unen a propósito.
+- Cada scraper reemplaza solo los horarios de sus propios cines; un scraper caído no borra nada.
+- Alerta vía `ALERT_WEBHOOK_URL` (ntfy-compatible); vacía = desactivada.
 
-## Completado esta sesión (2026-07-19)
+**Preguntas pendientes antes de continuar:**
+1. ¿Merge a `main` + deploy ya?
+2. ¿Commitear borrado de GitHub Pages (`pages.yml`, `CNAME`)? Revierte `97c8891`.
+3. ¿Commitear badges de idioma en `MovieModal.jsx` / `style.css` (cambios de otro agente)?
 
-- [x] **Mirror público en GitHub completado** (`github.com/MarioAraya/butaca-app`, rama `main`). Primero se pusheó sin `.drone.yml`/`docker-compose.prod.yml` (excluidos por privacidad de IPs), pero el usuario aclaró que **no le importa que las IPs privadas se vean** (RFC1918, no explotable) — solo que no se suba nada realmente sensible (`.env`, credenciales). Se agregaron esos 3 archivos también en un segundo commit (`c75dfa8`) al mirror. Confirmado: no había secretos reales en ningún archivo ni en el historial completo de git (auditado con `git log --all -p` antes del primer push).
-- [x] **Fix crítico: cartelera de Cinépolis vacía en prod** — diagnosticado con acceso SSH real al homelab (`ssh maaya@192.168.0.104`, habilitado por el usuario a mitad de sesión). El scrape automático de las 06:00 venía dando `status=partial, movies_found=3` (solo Normandie) tres días seguidos, mientras que triggers manuales corrían perfecto (13 pelis Cinépolis, 350+ showtimes). Causa: bloqueo transitorio de Cloudflare específico de esa ventana horaria, no un problema estructural.
-  - Se agregó `errors` al schema `ScrapeLogOut` (`src/api/schemas.py`) para poder diagnosticar sin SSH en el futuro — antes el campo existía en el modelo pero no se serializaba.
-  - Se implementó **retry con backoff** en `src/scraper/cinepolis.py` (`fetch_cinepolis`): hasta 3 intentos de sesión completa de browser, 30s entre reintentos, dispara tanto en excepción como en resultado vacío (Cloudflare puede devolver 200 sin nada útil). Camino feliz sin cambios (éxito en intento 1, sin logging extra).
-- [x] **Fix: Normandie mostraba 0 funciones para "hoy"** — Normandie cambió el formato del header de semana (antes repetía el mes en ambos días, ahora solo al final: "jueves 16 al miércoles 22 de julio"). El regex viejo anclaba mal y toda la semana quedaba corrida, solo se guardaba el último día. Reescrito `_parse_week_dates` en `src/scraper/normandie.py` para anclar en el día final (siempre tiene mes explícito). Verificado con scrape real (22 showtimes en la semana, incluye hoy).
-- [x] **Certificados TLS (`.lab`, mkcert) resueltos para el usuario en macOS y Windows** — el cert wildcard `*.lab` de Traefik es válido (`openssl verify` confirmado contra la CA local), pero `cine-api.lab` daba "Failed to fetch" en el browser porque nunca se había visitado directo (sin excepción de cert, a diferencia de `cine.lab` que sí se navegó). Se instaló la CA (`mkcert -install`, ya estaba en macOS) y se sirvió `rootCA.pem` vía HTTP temporal en la LAN (puerto 8899, cerrado al terminar) para que el usuario la importe en Windows (renombrada a `.cer` porque Windows no asocia `.pem`).
-- [x] Frontend deployado a Vercel (ver bloqueo arriba) — build y hosting funcionan, falta backend público.
+## Completado esta sesión
 
-## Pendiente (próximos pasos)
+- [x] `docs/SALAS_Y_DEDUPE.md`: documentación completa (commits, comportamiento, defectos corregidos, evaluación de `plan.md`, incidentes).
+- [x] Previewer de Markdown identificado: QLMarkdown (`brew install --cask qlmarkdown`), abrir con `qlmanage -p`. Guardado en memoria.
 
-- [ ] **Decidir y ejecutar backend público** (Cloudflare Tunnel vs VPS Contabo) — bloqueante para que el deploy de Vercel sirva datos reales. Ver sección "En progreso" arriba.
-- [ ] Si se elige VPS Contabo: falta definir/apuntar `API_DOMAIN` y `FRONTEND_DOMAIN` por DNS antes de levantar `docker-compose.vps.yml` ahí (pendiente de sesiones anteriores, sigue sin resolver).
-- [ ] **TMDb como fallback de rating** — OMDb tiene cache propio que puede quedar desactualizado (rating `N/A` aunque IMDb real ya tenga nota, visto con Evil Dead: En Llamas / `tt31170389`). No implementado.
-- [ ] Definir proceso de sync gitea → GitHub si se seguirán reflejando cambios ahí (hoy es manual, sin automatización).
-- [ ] Monitorear si el retry/backoff de Cinépolis (agregado hoy) realmente resuelve las fallas del cron de las 06:00, o si el patrón de bloqueo de Cloudflare es más persistente de lo que parece.
-- [ ] Verificar en un tiempo si el `x-apikey` de Cinepolis sigue vigente (puede rotar con sus deploys — ver `docs/RUNBOOK.md` sección 2).
-- [ ] Scrapers pendientes (v0.4.0): El Biógrafo, Cineplanet, Centro Arte Alameda.
-- [ ] Filtro por género (v0.3.0).
-- [ ] `CinemaFilter.jsx` — **corrección de nota anterior**: SÍ está en uso (importado y renderizado en `App.jsx`), no es código muerto como se anotó antes.
+## Completado sesiones anteriores (13–19 nov)
+
+- [x] Evaluación de implementación Gemini (cine1): 12 defectos contra payload real, todos corregidos.
+- [x] `parse_seat_layout` puro + tests con fixture real; `experience` del horario (`TRADICIONAL`, `4DX`).
+- [x] `GET /api/v1/rooms` + `RoomModal.jsx` (mapa al tocar la sala).
+- [x] Unión Normandie → Cinépolis (`_find_canonical_movie`); 4 películas unidas en scrape real.
+- [x] `GET /api/v1/billboard`: frontend de 1+N requests a 1; gzip (~250 KB → ~13 KB).
+- [x] `_purge_movies_without_showtimes` (126 eliminadas en primera corrida).
+- [x] `_send_alert` cuando scrape no es `success`.
+
+## Pendiente (próximos pasos inmediatos)
+
+- [ ] Merge de `feat/cinepolis-salas-precios` a `main`, push y deploy.
+- [ ] Configurar `ALERT_WEBHOOK_URL` en `.env` del homelab (topic privado ntfy).
+- [ ] Flush DNS en el Mac (`sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder`) y verificar Normandie en homelab (`docker logs que-ver-cine-hoy-api`).
+- [ ] Decidir borrado de GitHub Pages y badges de idioma (ver preguntas).
+- [ ] Verificar contra el sitio si Estación Central realmente no tiene pasillos horizontales.
+- [ ] `seatStyle` solo `Normal` visto; `.seat.special` sin ejercitar.
+- [ ] Archivar o marcar checklist de `plan.md`.
+- [ ] Opcional: ocupación en vivo por función (Playwright bajo demanda).
+- [ ] Backend público (Cloudflare Tunnel vs VPS Contabo).
+- [ ] TMDb fallback de rating cuando OMDb da `N/A`.
+- [ ] Scrapers v0.4.0: El Biógrafo, Cineplanet, Centro Arte Alameda.
+- [ ] Filtro por género en frontend.
 
 ## Notas
 
-- SSH al homelab (`ssh maaya@192.168.0.104`) está disponible y fue clave para diagnosticar el fallo de Cinépolis sin adivinar — usarlo cuando haga falta ver logs reales de prod en vez de especular.
-- Backend Docker sigue siendo pesado (Chromium vía Playwright) — builds de CI tardan más que antes de la migración del scraper.
-- Correr backend siempre desde raíz del repo (`cd ~/dev/que-ver-cine-hoy && uvicorn src.main:app --reload --port 8000`) — SQLite usa ruta relativa.
-- `POST /api/v1/admin/scrape` es asíncrono — revisar resultado con `GET /api/v1/admin/scrape-logs` (ahora incluye `errors` con el detalle de la falla, no solo el status).
-- Ver `docs/RUNBOOK.md` antes de investigar desde cero cualquier falla de scrape — cubre los casos ya conocidos (401/403 Cinépolis, cambios de HTML en Normandie, OMDb).
-- `vgradio-api.lab` (otro proyecto en el mismo homelab) usa el mismo cert wildcard `*.lab` — mismo fix de CA aplica ahí también.
+- Normandie: `[Errno 8] nodename nor servname provided` en el Mac, pero `dig normandie.cl @8.8.8.8` → `201.148.105.162`. Caché negativa de `mDNSResponder`, no bug de código.
+- Cinépolis `Executable doesn't exist ... chromium_headless_shell`: `python3 -m playwright install chromium`.
+- `uvicorn` local sin `--reload` no toma código nuevo: reiniciar.
+- `fetch_cinepolis` retorna `(movies, showtimes, prices, rooms)`.
+- Regenerar solo salas:
+  ```bash
+  python3 -c "
+  import asyncio
+  from src.scraper.rate_limiter import RateLimiter
+  from src.scraper.cinepolis import fetch_cinepolis
+  from src.scraper.orchestrator import _save_rooms
+  m, s, p, r = asyncio.run(fetch_cinepolis(RateLimiter()))
+  _save_rooms(r)
+  "
+  ```
+- Dos agentes en mismo árbol (Gemini + Claude): sin colisiones, pero `plan-fix-salas.md` y `scratch*` desaparecieron sin causa determinada. Usar ramas/worktrees separados.
+- SSH homelab: `ssh maaya@192.168.0.104`. Correr backend desde raíz (SQLite ruta relativa).
+- `POST /api/v1/admin/scrape` es asíncrono; ver `GET /api/v1/admin/scrape-logs`.

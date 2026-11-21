@@ -43,6 +43,13 @@
 - [x] Filtro por cine (toggle multi-select, mismo estilo que fechas)
 - [x] Detalle de película con trailer embebido (modal bottom sheet)
 - [ ] Filtro por género
+- [x] Precio mínimo de entrada por horario (Cinépolis, `TicketPrice`) — rama `feat/cinepolis-salas-precios`
+- [x] Sala por horario (`room_name`) + mapa de butacas por sala (`docs/SALAS_CINEPOLIS.html`) — rama `feat/cinepolis-salas-precios`
+- [x] Mapa de sala en la app: `GET /api/v1/rooms` + modal al tocar la sala — rama `feat/cinepolis-salas-precios`
+- [x] Cartelera en 1 request: `GET /api/v1/billboard` + gzip — rama `feat/cinepolis-salas-precios`
+- [x] Unión de películas duplicadas Normandie ↔ Cinépolis por título normalizado — rama `feat/cinepolis-salas-precios`
+- [x] Purga de películas sin funciones al final de cada scrape — rama `feat/cinepolis-salas-precios`
+- [ ] Ocupación en vivo por función (opcional)
 - [x] Rating IMDb (OMDb API) por película, badge en card + link en modal
 - [ ] TMDb como fallback de rating cuando OMDb tiene cache desactualizado (da `N/A` aunque IMDb real ya tenga nota) — ver `docs/RUNBOOK.md` sección 4
 
@@ -56,6 +63,7 @@
 - [ ] Alertas de estrenos
 - [ ] Notificaciones por género favorito
 - [ ] Webhook para integraciones
+- [x] Alerta de scrape fallido/parcial vía `ALERT_WEBHOOK_URL` (ntfy) — rama `feat/cinepolis-salas-precios`
 
 ### Infra / Deploy
 - [x] Mirror público en GitHub (`github.com/MarioAraya/butaca-app`), incluye toda la config de deploy (IPs privadas del homelab expuestas a propósito, no son secretas)

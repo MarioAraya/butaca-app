@@ -8,6 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from src.api.router import router
 from src.config import settings
@@ -77,6 +78,8 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+# /billboard returns the whole listing (~270 KB of JSON); compresses ~10x
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
 @app.middleware("http")

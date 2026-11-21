@@ -2,7 +2,14 @@ function formatTime(t) {
   return String(t).slice(0, 5)
 }
 
-export default function MovieCard({ movie, byCinema, onSelect }) {
+function formatPrice(showtime) {
+  const prices = showtime.ticket_prices
+  if (!prices || prices.length === 0) return null
+  const min = Math.min(...prices.map((p) => p.price_cents))
+  return `$${Math.round(min / 100).toLocaleString('es-CL')}`
+}
+
+export default function MovieCard({ movie, byCinema, onSelect, onRoomSelect }) {
   return (
     <article class="movie-card" onClick={onSelect} role="button" tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && onSelect()}>
@@ -51,8 +58,25 @@ export default function MovieCard({ movie, byCinema, onSelect }) {
                     {t.format && (
                       <span class="time-pill-tag">{t.format}</span>
                     )}
+                    {t.room_name && (
+                      <button
+                        type="button"
+                        class="time-pill-tag time-pill-room"
+                        title={`Ver mapa de ${t.room_name}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onRoomSelect?.(cinemaName, t.room_name)
+                        }}
+                        onKeyDown={(e) => e.key === 'Enter' && e.stopPropagation()}
+                      >
+                        {t.room_name}
+                      </button>
+                    )}
                     {t.language && (
                       <span class="time-pill-tag">{t.language}</span>
+                    )}
+                    {formatPrice(t) && (
+                      <span class="time-pill-tag time-pill-price">{formatPrice(t)}</span>
                     )}
                   </span>
                 ))}

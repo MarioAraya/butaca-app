@@ -28,7 +28,8 @@ logger = logging.getLogger(__name__)
 
 SITE_URL = "https://cinepolis.com/cl"
 GRAPHQL_URL = "https://api-g.cinepolis.com/v2/billboards/graphql"
-BILLBOARD_URL = "https://api-g.cinepolis.com/v1/billboards/graphql"
+BILLBOARD_URL = "https://api-g.cinepolis.com/v2/billboards/graphql"
+TICKETS_URL = "https://api-g.cinepolis.com/v1/ticket/graphql"
 MEDIA_BASE_URL = "https://tickets-static-content.cinepolis.com"
 
 # Cloudflare occasionally blocks a single scrape attempt (seen so far only on
@@ -43,6 +44,14 @@ RETRY_BACKOFF_SECONDS = 30
 CINEMAS = {
     "cinepolis-estacion-central-santiago-centro": "Cinépolis Estación Central",
     "cinepolis-vivo-imperio-santiago-centro": "Cinépolis Vivo Imperio",
+}
+
+# Vista (booking system) cinema IDs, required by the Tickets GraphQL query.
+# Static — fetched once via shared-services/locations/graphql Cinemas query,
+# doesn't change unless Cinepolis re-provisions the cinema in Vista.
+CINEMA_VISTA_IDS = {
+    "cinepolis-estacion-central-santiago-centro": "712",
+    "cinepolis-vivo-imperio-santiago-centro": "916",
 }
 
 _USER_AGENT = (
@@ -75,9 +84,17 @@ query Movies($countryId: String!, $category: String, $cinemas: String, $after: S
 """
 
 _BILLBOARD_QUERY = """
-query Billboard($countryId: String!, $cinemaId: String!, $timezone: String!, $isOffSelectorDays: Boolean!) {
-  billboardByCinema(countryId: $countryId, cinemaId: $cinemaId, timezone: $timezone, isOffSelectorDays: $isOffSelectorDays) {
+query Billboard($countryId: String!, $cinemaId: String!, $timezone: String!, $isAbsoluteExperiencePath: Boolean) {
+  billboardByCinema(
+    countryId: $countryId
+    cinemaId: $cinemaId
+    timezone: $timezone
+    isAbsoluteExperiencePath: $isAbsoluteExperiencePath
+  ) {
+    dates
     schedules {
+      cinemaId
+      cityId
       movieId
       dates {
         date
@@ -85,12 +102,112 @@ query Billboard($countryId: String!, $cinemaId: String!, $timezone: String!, $is
           language
           displayLanguage
           showtimes {
-            format { name }
+            format {
+              icon
+              name
+              __typename
+            }
+            sessionId
             datetime
+            screen
+            experience {
+              icon
+              name
+              __typename
+            }
+            movieVistaId
+            cinemaVistaId
+            alerts {
+              section
+              title
+              message
+              __typename
+            }
+            availability
+            isAllocatedSeating
+            __typename
           }
+          __typename
         }
+        __typename
       }
+      __typename
     }
+    __typename
+  }
+}
+"""
+
+_SEATS_QUERY = """
+query Seats($countryId: String!, $sessionId: String!, $cinemaVistaId: String!, $userSessionId: String, $experience: String) {
+  seats(
+    countryId: $countryId
+    sessionId: $sessionId
+    cinemaVistaId: $cinemaVistaId
+    userSessionId: $userSessionId
+    experience: $experience
+  ) {
+    maxQuantity
+    seatLayoutData {
+      areas {
+        rowCount
+        columnCount
+        description
+        areaCategoryCode
+        rows {
+          physicalName
+          seats {
+            id
+            status
+            originalStatus
+            seatStyle
+            position {
+              columnIndex
+              rowIndex
+              areaNumber
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+        __typename
+      }
+      areaCategories {
+        areaCategoryCode
+        seatType
+        capacity
+        name
+        description
+        image
+        hopk
+        selectedSeats {
+          areaNumber
+          rowIndex
+          columnIndex
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}
+"""
+
+_TICKETS_QUERY = """
+query Tickets($countryId: String!, $sessionId: String!, $cinemaVistaId: String!) {
+  tickets(countryId: $countryId, cinemaVistaId: $cinemaVistaId, sessionId: $sessionId) {
+    areaCategoryCode
+    tickets {
+      ticketTypeCode
+      description
+      priceInCents
+      bookingFee
+      __typename
+    }
+    __typename
   }
 }
 """
@@ -155,17 +272,65 @@ async def _graphql(page, url: str, operation_name: str, query: str, variables: d
     return payload["data"]
 
 
-async def fetch_cinepolis(rate_limiter: RateLimiter) -> tuple[list[dict], list[dict]]:
-    """Fetch movies + showtimes for all configured Cinepolis cinemas.
+def parse_seat_layout(seats_payload: dict | None) -> dict:
+    """Normalize a `Seats` GraphQL response (the `data` dict) into a room topology.
 
-    Retries the whole browser session on failure or an empty result (see
-    MAX_ATTEMPTS) — a transient Cloudflare block on one attempt doesn't
-    reliably repeat on the next fresh navigation.
+    The API returns rows back-to-front (rowIndex 0 = farthest from the screen)
+    and columnIndex ascending, while the site draws row A next to the screen
+    and columns descending left-to-right. Rows are returned screen -> back,
+    seats in display order (col descending), empty rows dropped.
     """
+    layout = ((seats_payload or {}).get("seats") or {}).get("seatLayoutData") or {}
+    areas = layout.get("areas") or []
+    cats = layout.get("areaCategories") or []
+
+    rows: list[dict] = []
+    for area in areas:
+        for r in (area or {}).get("rows") or []:
+            raw_seats = (r or {}).get("seats") or []
+            if not raw_seats:
+                continue
+            seats = []
+            for s in raw_seats:
+                pos = s.get("position") or {}
+                seats.append({
+                    "id": str(s.get("id") or ""),
+                    "col": pos.get("columnIndex") or 0,
+                    "row_index": (pos.get("rowIndex") or 0),
+                    "status": s.get("status") or "Empty",
+                    "style": s.get("seatStyle") or "Normal",
+                })
+            row_index = seats[0]["row_index"]
+            for s in seats:
+                del s["row_index"]
+            seats.sort(key=lambda s: s["col"], reverse=True)
+            rows.append({"name": r.get("physicalName") or "", "row_index": row_index, "seats": seats})
+
+    rows.sort(key=lambda r: r["row_index"], reverse=True)
+    aisles_after = [
+        cur["name"] for cur, nxt in zip(rows, rows[1:])
+        if cur["row_index"] - nxt["row_index"] > 1
+    ]
+    cols = [s["col"] for r in rows for s in r["seats"]]
+    first_cat = cats[0] if cats and cats[0] else {}
+    return {
+        "rows": rows,
+        "aisles_after": aisles_after,
+        "min_col": min(cols) if cols else 0,
+        "max_col": max(cols) if cols else 0,
+        "total_seats": len(cols),
+        "seat_image": first_cat.get("image"),
+        "seat_description": first_cat.get("description"),
+        "area_names": [a.get("description") for a in areas if a and a.get("description")],
+    }
+
+
+async def fetch_cinepolis(rate_limiter: RateLimiter) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
+    """Fetch movies + showtimes + ticket prices + room seat maps for all configured Cinepolis cinemas."""
     last_error: Exception | None = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            movies, showtimes = await _fetch_cinepolis_once(rate_limiter)
+            movies, showtimes, prices, rooms = await _fetch_cinepolis_once(rate_limiter)
         except Exception as e:
             last_error = e
             logger.warning("Cinepolis scrape attempt %d/%d failed: %s", attempt, MAX_ATTEMPTS, e)
@@ -173,7 +338,7 @@ async def fetch_cinepolis(rate_limiter: RateLimiter) -> tuple[list[dict], list[d
             if movies:
                 if attempt > 1:
                     logger.info("Cinepolis scrape succeeded on attempt %d/%d", attempt, MAX_ATTEMPTS)
-                return movies, showtimes
+                return movies, showtimes, prices, rooms
             last_error = None
             logger.warning("Cinepolis scrape attempt %d/%d returned 0 movies", attempt, MAX_ATTEMPTS)
 
@@ -184,13 +349,15 @@ async def fetch_cinepolis(rate_limiter: RateLimiter) -> tuple[list[dict], list[d
         "Cinepolis scrape failed after %d attempts%s — see docs/RUNBOOK.md",
         MAX_ATTEMPTS, f": {last_error}" if last_error else " (kept returning 0 movies)",
     )
-    return [], []
+    return [], [], [], []
 
 
-async def _fetch_cinepolis_once(rate_limiter: RateLimiter) -> tuple[list[dict], list[dict]]:
+async def _fetch_cinepolis_once(rate_limiter: RateLimiter) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
     """Single attempt: launch a browser, pass Cloudflare, fetch all cinemas."""
     movies: dict[str, dict] = {}
     showtimes: list[dict] = []
+    prices: list[dict] = []
+    rooms: list[dict] = []
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -237,7 +404,7 @@ async def _fetch_cinepolis_once(rate_limiter: RateLimiter) -> tuple[list[dict], 
                             "countryId": "CL",
                             "cinemaId": cinema_id,
                             "timezone": "America/Santiago",
-                            "isOffSelectorDays": True,
+                            "isAbsoluteExperiencePath": True,
                         },
                     )
                 except Exception:
@@ -245,6 +412,9 @@ async def _fetch_cinepolis_once(rate_limiter: RateLimiter) -> tuple[list[dict], 
                     continue
 
                 billboard = board.get("billboardByCinema") or {}
+                sample_session_by_format: dict[str, str] = {}
+                sample_session_by_room: dict[str, dict] = {}
+
                 for schedule in billboard.get("schedules", []):
                     movie_slug = schedule["movieId"]
                     for date_entry in schedule.get("dates", []):
@@ -259,16 +429,94 @@ async def _fetch_cinepolis_once(rate_limiter: RateLimiter) -> tuple[list[dict], 
                                     dt = datetime.fromisoformat(st["datetime"])
                                 except (ValueError, TypeError):
                                     continue
+                                format_name = (st.get("format") or {}).get("name")
+                                screen_val = st.get("screen")
+                                room_name = f"Sala {screen_val}" if screen_val else None
+
                                 showtimes.append({
                                     "movie_slug": movie_slug,
                                     "cinema_name": cinema_name,
                                     "show_date": show_date,
                                     "show_time": dt.time(),
                                     "language": language,
-                                    "format": (st.get("format") or {}).get("name"),
+                                    "format": format_name,
+                                    "room_name": room_name,
                                 })
+                                session_id = st.get("sessionId")
+                                if session_id and format_name not in sample_session_by_format:
+                                    sample_session_by_format[format_name] = session_id
+                                if session_id and room_name:
+                                    info = sample_session_by_room.setdefault(room_name, {
+                                        "session_id": session_id,
+                                        "format": format_name,
+                                        "experience": (st.get("experience") or {}).get("name"),
+                                        "formats": [],
+                                    })
+                                    if format_name and format_name not in info["formats"]:
+                                        info["formats"].append(format_name)
+
+                vista_id = CINEMA_VISTA_IDS.get(cinema_id)
+
+                # Fetch room seat layouts
+                for room_name, sess_info in sorted(sample_session_by_room.items()):
+                    await rate_limiter.wait()
+                    experience = (sess_info.get("experience") or "TRADICIONAL").upper()
+                    logger.info(
+                        "Fetching Cinepolis seat layout for %s / %s (session %s, experience %s)",
+                        cinema_name, room_name, sess_info["session_id"], experience,
+                    )
+                    try:
+                        seats_data = await _graphql(
+                            page, TICKETS_URL, "Seats", _SEATS_QUERY,
+                            {
+                                "countryId": "CL",
+                                "sessionId": sess_info["session_id"],
+                                "cinemaVistaId": vista_id,
+                                "experience": experience,
+                            },
+                        )
+                        layout = parse_seat_layout(seats_data)
+                        if layout["total_seats"] == 0:
+                            logger.warning("Empty seat layout for %s / %s, skipping", cinema_name, room_name)
+                            continue
+                        rooms.append({
+                            "cinema_id": cinema_id,
+                            "cinema_name": cinema_name,
+                            "room_name": room_name,
+                            "formats": sess_info["formats"],
+                            "sampled_session_id": sess_info["session_id"],
+                            "sampled_at": datetime.now().isoformat(timespec="seconds"),
+                            "experience": experience,
+                            **layout,
+                        })
+                    except Exception:
+                        logger.exception("Failed to fetch seat layout for %s / %s", cinema_name, room_name)
+                        continue
+
+                # Fetch ticket prices
+                for format_name, session_id in sample_session_by_format.items():
+                    await rate_limiter.wait()
+                    logger.info("Fetching Cinepolis ticket prices for %s / %s", cinema_id, format_name)
+                    try:
+                        ticket_data = await _graphql(
+                            page, TICKETS_URL, "Tickets", _TICKETS_QUERY,
+                            {"countryId": "CL", "sessionId": session_id, "cinemaVistaId": vista_id},
+                        )
+                    except Exception:
+                        logger.exception("Failed to fetch ticket prices for %s / %s", cinema_id, format_name)
+                        continue
+                    for area in ticket_data.get("tickets") or []:
+                        for ticket in area.get("tickets") or []:
+                            prices.append({
+                                "cinema_name": cinema_name,
+                                "format": format_name,
+                                "ticket_type_code": ticket.get("ticketTypeCode"),
+                                "description": ticket.get("description"),
+                                "price_cents": ticket.get("priceInCents"),
+                                "booking_fee_cents": ticket.get("bookingFee"),
+                            })
         finally:
             await browser.close()
 
-    logger.info("Cinepolis: %d movies, %d showtimes", len(movies), len(showtimes))
-    return list(movies.values()), showtimes
+    logger.info("Cinepolis: %d movies, %d showtimes, %d prices, %d rooms", len(movies), len(showtimes), len(prices), len(rooms))
+    return list(movies.values()), showtimes, prices, rooms

@@ -5,6 +5,15 @@ from datetime import date, datetime, time
 from pydantic import BaseModel
 
 
+class TicketPriceOut(BaseModel):
+    ticket_type_code: str
+    description: str
+    price_cents: int
+    booking_fee_cents: int | None
+
+    model_config = {"from_attributes": True}
+
+
 class ShowtimeOut(BaseModel):
     id: int
     cinema_name: str
@@ -13,6 +22,8 @@ class ShowtimeOut(BaseModel):
     show_time: time
     language: str | None
     format: str | None
+    room_name: str | None = None
+    ticket_prices: list[TicketPriceOut] = []
 
     model_config = {"from_attributes": True}
 
